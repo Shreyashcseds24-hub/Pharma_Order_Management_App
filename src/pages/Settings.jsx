@@ -22,6 +22,7 @@ import { DemoBanner } from '../components/ui/States'
 import { useToast } from '../components/ui/Toast'
 import { useAuth } from '../context/AuthContext'
 import { API_BASE_URL, USE_MOCK_API } from '../services/api'
+import { changePassword, sessionStore, updateProfile } from '../services/authService'
 import { ROLE_LABELS } from '../data/constants'
 import { formatDate } from '../utils/format'
 
@@ -48,9 +49,11 @@ const EmailRow = ({ label, id, type, value, onChange, disabled }) => (
 )
 
 export const Settings = () => {
-  const { user } = useAuth()
+  const { user, updateSession } = useAuth()
   const { toast } = useToast()
   const [refreshedOn] = useState(() => formatDate(new Date().toISOString()))
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
 
   const [profile, setProfile] = useState({
     name: user?.name ?? '',
@@ -70,15 +73,32 @@ export const Settings = () => {
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' })
   const [passwordErrors, setPasswordErrors] = useState({})
 
-  const saveProfile = (event) => {
+  const saveProfile = async (event) => {
     event.preventDefault()
-    toast('Profile changes are local to this demo session and were not uploaded.', {
-      type: 'info',
-      title: 'Demo only',
-    })
+    if (!profile.name.trim()) {
+      toast('Enter your full name.', { type: 'warning' })
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const { user: updated } = await updateProfile({
+        name: profile.name.trim(),
+        title: profile.title.trim(),
+      })
+      const session = sessionStore.get()
+      updateSession({ ...(session ?? {}), user: updated })
+      setProfile({ name: updated.name, email: updated.email, title: updated.title })
+      toast(USE_MOCK_API ? 'Profile updated for this demo session.' : 'Profile updated.', {
+        type: 'success',
+      })
+    } catch (error) {
+      toast(error.message, { type: 'error' })
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
-  const savePassword = (event) => {
+  const savePassword = async (event) => {
     event.preventDefault()
     const errors = {}
     if (!passwordForm.current) errors.current = 'Enter your current password.'
@@ -86,9 +106,27 @@ export const Settings = () => {
     if (passwordForm.next !== passwordForm.confirm) errors.confirm = 'Passwords do not match.'
     setPasswordErrors(errors)
     if (Object.keys(errors).length) return
-    setConfirmPassword(null)
-    setPasswordForm({ current: '', next: '', confirm: '' })
-    toast('Password updates require the Flask API. Nothing was changed.', { type: 'warning' })
+
+    setSavingPassword(true)
+    try {
+      await changePassword({
+        currentPassword: passwordForm.current,
+        newPassword: passwordForm.next,
+      })
+      setConfirmPassword(null)
+      setPasswordForm({ current: '', next: '', confirm: '' })
+      toast('Password updated.', { type: 'success' })
+    } catch (error) {
+      if (error.details && typeof error.details === 'object') {
+        setPasswordErrors({
+          current: error.details.current,
+          next: error.details.next,
+        })
+      }
+      toast(error.message, { type: 'error' })
+    } finally {
+      setSavingPassword(false)
+    }
   }
 
   const toggle = (key) => (event) => setPrefs({ ...prefs, [key]: event.target.checked })
@@ -143,7 +181,7 @@ export const Settings = () => {
                   />
                 </div>
                 <div className="flex justify-end">
-                  <Button type="submit" icon={Save} size="sm">
+                  <Button type="submit" icon={Save} size="sm" loading={savingProfile}>
                     Save profile
                   </Button>
                 </div>
@@ -227,7 +265,9 @@ export const Settings = () => {
                 <div>
                   <p className="text-sm font-medium text-slate-800">Password</p>
                   <p className="text-xs text-app-muted">
-                    Last updated 34 days ago. Authentication is not yet connected to a server.
+                    {USE_MOCK_API
+                      ? 'Demo accounts are validated in the browser.'
+                      : 'Passwords are hashed and verified by the Flask API.'}
                   </p>
                 </div>
                 <Button
@@ -286,7 +326,9 @@ export const Settings = () => {
                 })}
               </ul>
               <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
-                This table reflects the demo role switcher only. It is not an access control mechanism.
+                {USE_MOCK_API
+                  ? 'This table reflects the demo role switcher only. It is not an access control mechanism.'
+                  : 'The Flask API re-checks these permissions on every request; the UI only hides actions.'}
               </p>
             </CardBody>
           </Card>
@@ -339,7 +381,11 @@ export const Settings = () => {
         open={Boolean(confirmPassword)}
         onClose={() => setConfirmPassword(null)}
         title="Change password"
-        description="Password changes are not connected to a server yet."
+        description={
+          USE_MOCK_API
+            ? 'Demo password changes are not sent to a server.'
+            : 'Your new password is hashed and stored by the Flask API.'
+        }
         icon={Lock}
         size="sm"
         footer={
@@ -347,7 +393,7 @@ export const Settings = () => {
             <Button variant="secondary" onClick={() => setConfirmPassword(null)}>
               Cancel
             </Button>
-            <Button form="password-form" type="submit">
+            <Button form="password-form" type="submit" loading={savingPassword}>
               Update password
             </Button>
           </>

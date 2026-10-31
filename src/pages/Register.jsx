@@ -8,7 +8,7 @@ import { DemoBanner } from '../components/ui/States'
 import { useToast } from '../components/ui/Toast'
 import { register, sessionStore } from '../services/authService'
 import { ROLES, ROLE_LABELS } from '../data/constants'
-import { tokenStore } from '../services/api'
+import { tokenStore, USE_MOCK_API } from '../services/api'
 
 const validate = (form) => {
   const errors = {}
@@ -60,7 +60,12 @@ export const Register = () => {
       })
       sessionStore.set(session)
       tokenStore.set(session.token)
-      toast('Demo account created. No data was sent to a server.', { type: 'success' })
+      toast(
+        USE_MOCK_API
+          ? 'Demo account created. No data was sent to a server.'
+          : 'Account created. Welcome to MediFlow AI.',
+        { type: 'success' },
+      )
       navigate('/dashboard', { replace: true })
     } catch (error) {
       setApiError(error.message)

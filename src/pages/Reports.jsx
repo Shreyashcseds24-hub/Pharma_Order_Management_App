@@ -25,6 +25,7 @@ import { DataTable } from '../components/tables/DataTable'
 import { AXIS_PROPS, GRID_PROPS, SERIES_COLORS, compactCurrency, tooltipStyle } from '../components/charts/chartTheme'
 import { useAsync } from '../hooks/useAsync'
 import { getReports } from '../services/analyticsService'
+import { USE_MOCK_API } from '../services/api'
 import { formatCurrency, formatDate, formatNumber } from '../utils/format'
 
 const PIE_COLORS = [
@@ -68,10 +69,12 @@ export const Reports = () => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'mediflow-top-selling-demo.csv'
+    link.download = 'mediflow-top-selling.csv'
     link.click()
     URL.revokeObjectURL(url)
-    toast('Report exported as a demo CSV.', { type: 'success' })
+    toast(USE_MOCK_API ? 'Report exported as a demo CSV.' : 'Report exported as a CSV.', {
+      type: 'success',
+    })
   }
 
   return (
@@ -96,8 +99,8 @@ export const Reports = () => {
       </div>
 
       <DemoBanner icon={TrendingUp}>
-        Aggregates are computed in the browser from the sample dataset. On the Flask backend these
-        queries belong in MySQL views or a reporting module.
+        Aggregates are computed in the browser from the sample dataset. In live mode the Flask API
+        aggregates them from PostgreSQL.
       </DemoBanner>
 
       {error ? <ErrorState message={error} onRetry={reload} /> : null}
@@ -106,7 +109,7 @@ export const Reports = () => {
         <KpiCard
           label="Revenue (30d)"
           value={formatCurrency(data?.kpis.revenue30d ?? 0, { compact: true })}
-          hint="Sum of demo daily revenue"
+          hint="Sum of daily revenue"
           icon={TrendingUp}
           loading={loading}
         />
@@ -267,7 +270,11 @@ export const Reports = () => {
               rows={topSellingRows}
               emptyIcon={PackageSearch}
               emptyTitle="No sales data"
-              emptyDescription="Nothing has been issued in the demo dataset yet."
+              emptyDescription={
+                USE_MOCK_API
+                  ? 'Nothing has been issued in the demo dataset yet.'
+                  : 'No medicines have been issued in this period yet.'
+              }
             />
           )}
         </Card>

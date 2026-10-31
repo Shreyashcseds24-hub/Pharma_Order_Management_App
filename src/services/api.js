@@ -14,6 +14,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 export const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API !== 'false'
 
 const TOKEN_KEY = 'mediflow.token'
+const SESSION_KEY = 'mediflow.session'
+
+export const SESSION_EXPIRED_EVENT = 'mediflow:session-expired'
 
 export const tokenStore = {
   get: () => {
@@ -74,6 +77,20 @@ api.interceptors.response.use(
     const { status, data } = error.response
     const message =
       data?.message || data?.error || `Request failed with status ${status}.`
+
+    // A protected request was rejected because the token is missing/expired.
+    // Clear the stale session once and let the app redirect to the login page.
+    const isAuthRoute = String(error.config?.url || '').startsWith('/auth/')
+    if (status === 401 && !isAuthRoute && tokenStore.get()) {
+      tokenStore.clear()
+      try {
+        localStorage.removeItem(SESSION_KEY)
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT))
+    }
+
     return Promise.reject(new ApiError(message, status, data?.errors))
   },
 )

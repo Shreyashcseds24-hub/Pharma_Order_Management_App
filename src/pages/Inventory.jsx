@@ -25,6 +25,7 @@ import { useAsync } from '../hooks/useAsync'
 import { useDebounce } from '../hooks/useDebounce'
 import { adjustStock, listInventory } from '../services/inventoryService'
 import { useAuth } from '../context/AuthContext'
+import { USE_MOCK_API } from '../services/api'
 import { formatCurrency, formatDate, formatNumber } from '../utils/format'
 
 const PAGE_SIZE = 10
@@ -175,10 +176,13 @@ export const Inventory = () => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'mediflow-inventory-demo.csv'
+    link.download = 'mediflow-inventory.csv'
     link.click()
     URL.revokeObjectURL(url)
-    toast('Inventory export downloaded (demo CSV).', { type: 'info' })
+    toast(
+      USE_MOCK_API ? 'Inventory export downloaded (demo CSV).' : 'Inventory export downloaded.',
+      { type: 'info' },
+    )
   }
 
   const clearFilters = () => {
@@ -274,7 +278,7 @@ export const Inventory = () => {
             Batch inventory
           </h2>
           <p className="mt-0.5 text-sm text-app-muted">
-            FEFO tracked batches across both demo warehouses.
+            FEFO tracked batches across all warehouses.
           </p>
         </div>
         <div className="flex items-center gap-2">

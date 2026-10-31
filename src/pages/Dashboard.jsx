@@ -503,7 +503,7 @@ export const Dashboard = () => {
         <Card className="xl:col-span-2">
           <CardHeader
             title="Demand outlook"
-            description="Demo forecast versus actual units issued"
+            description="Forecast versus actual units issued"
             icon={TrendingUp}
             action={
               <Link to="/ai-insights" className="text-xs font-medium text-brand-700 hover:underline">

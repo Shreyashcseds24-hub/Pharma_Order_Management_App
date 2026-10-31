@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+*.sqlite
+*.sqlite3
+logs/
+
+# Embedded PostgreSQL data directory used by the local test setup
+.pgdata/

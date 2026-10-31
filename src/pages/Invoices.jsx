@@ -22,6 +22,7 @@ import { useAsync } from '../hooks/useAsync'
 import { useDebounce } from '../hooks/useDebounce'
 import { getInvoiceDetail, listInvoices, recordPayment } from '../services/analyticsService'
 import { PAYMENT_STATUSES } from '../data/constants'
+import { USE_MOCK_API } from '../services/api'
 import { cn, formatCurrency, formatDate, formatNumber } from '../utils/format'
 
 const PAGE_SIZE = 8
@@ -102,8 +103,10 @@ export const Invoices = () => {
 
   const downloadInvoice = (invoice) => {
     toast(
-      `Invoice download requires the backend document endpoint. Use Print for a local copy of ${invoice.invoiceNumber}.`,
-      { type: 'info', title: 'Demo action' },
+      USE_MOCK_API
+        ? `Invoice download requires the backend document endpoint. Use Print for a local copy of ${invoice.invoiceNumber}.`
+        : `Use Print to save ${invoice.invoiceNumber} as a PDF.`,
+      { type: 'info', title: USE_MOCK_API ? 'Demo action' : 'Print invoice' },
     )
     window.print()
   }

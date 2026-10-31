@@ -505,7 +505,7 @@ export const Medicines = () => {
       >
         <p className="text-sm leading-relaxed text-slate-700">
           Remove <span className="font-semibold text-slate-900">{confirmDelete?.name}</span> from the catalog? This
-          also removes its batch records from the demo dataset. This action cannot be undone.
+          hides the medicine from new orders while keeping historical orders and invoices intact.
         </p>
       </Modal>
     </div>

@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { X, ChevronsLeft, ChevronsRight, FlaskConical } from 'lucide-react'
 import { navItemsForRole } from '../../layout/navConfig'
 import { useAuth } from '../../context/AuthContext'
+import { USE_MOCK_API } from '../../services/api'
 import { cn } from '../../utils/format'
 import { Logo } from './Logo'
 
@@ -113,7 +114,7 @@ export const Sidebar = ({ open, onClose, collapsed, onToggleCollapse }) => {
         ) : (
           <>
             <NavItems items={items} onNavigate={onClose} />
-            <DemoNotice />
+            {USE_MOCK_API ? <DemoNotice /> : null}
           </>
         )}
 

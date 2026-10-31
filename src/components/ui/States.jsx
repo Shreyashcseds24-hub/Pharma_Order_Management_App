@@ -1,4 +1,5 @@
 import { cn } from '../../utils/format'
+import { USE_MOCK_API } from '../../services/api'
 
 export const EmptyState = ({ icon: Icon, title, description, action, className, compact = false }) => (
   <div
@@ -42,15 +43,19 @@ export const ErrorState = ({ title = 'Something went wrong', message, onRetry, c
   </div>
 )
 
-export const DemoBanner = ({ children, className, icon: Icon }) => (
-  <div
-    className={cn(
-      'flex items-start gap-2.5 rounded-2xl border border-brand-200/60 bg-brand-50/70 px-4 py-3 text-xs text-brand-800',
-      'shadow-soft',
-      className,
-    )}
-  >
-    {Icon ? <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : null}
-    <p className="leading-relaxed">{children}</p>
-  </div>
-)
+export const DemoBanner = ({ children, className, icon: Icon }) => {
+  if (!USE_MOCK_API) return null
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2.5 rounded-2xl border border-brand-200/60 bg-brand-50/70 px-4 py-3 text-xs text-brand-800',
+        'shadow-soft',
+        className,
+      )}
+    >
+      {Icon ? <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+      <p className="leading-relaxed">{children}</p>
+    </div>
+  )
+}

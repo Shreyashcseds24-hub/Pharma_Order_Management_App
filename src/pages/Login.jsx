@@ -9,7 +9,7 @@ import { useToast } from '../components/ui/Toast'
 import { DEMO_ACCOUNTS, login, sessionStore } from '../services/authService'
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../data/constants'
 import { cn } from '../utils/format'
-import { tokenStore } from '../services/api'
+import { tokenStore, USE_MOCK_API } from '../services/api'
 
 export const Login = () => {
   const [role, setRole] = useState(ROLES.ADMIN)
@@ -48,7 +48,12 @@ export const Login = () => {
       const session = await login({ ...form, role })
       sessionStore.set(session)
       tokenStore.set(session.token)
-      toast(`Signed in as ${ROLE_LABELS[role]}. Demo session active.`, { type: 'success' })
+      toast(
+        USE_MOCK_API
+          ? `Signed in as ${ROLE_LABELS[role]}. Demo session active.`
+          : `Signed in as ${ROLE_LABELS[role]}.`,
+        { type: 'success' },
+      )
       navigate('/dashboard', { replace: true })
     } catch (error) {
       setApiError(error.message)
@@ -136,7 +141,9 @@ export const Login = () => {
       <div className="neu-soft mt-6 flex items-center justify-between rounded-2xl px-4 py-3">
         <p className="flex items-center gap-2 text-xs text-app-muted">
           <ShieldCheck className="h-4 w-4 text-accent-600" aria-hidden="true" />
-          Sessions are stubbed in the frontend until the Flask API is connected.
+          {USE_MOCK_API
+            ? 'Sessions are stubbed in the frontend until the Flask API is connected.'
+            : 'Sessions are issued by the Flask API and stored in this browser.'}
         </p>
         <Link to="/register" className="text-xs font-medium text-brand-700 underline underline-offset-2">
           Register

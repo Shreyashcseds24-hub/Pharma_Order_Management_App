@@ -114,5 +114,57 @@ export const fetchProfile = () =>
     },
   )
 
-const authService = { login, register, logout, fetchProfile, sessionStore, DEMO_ACCOUNTS }
+export const updateProfile = (payload) =>
+  withFallback(
+    async () => {
+      const session = sessionStore.get()
+      if (!session?.user) await reject('No active session.', 401)
+      const name = String(payload.name ?? session.user.name).trim()
+      const initials = name
+        .split(' ')
+        .filter(Boolean)
+        .map((part) => part[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+      const user = {
+        ...session.user,
+        name,
+        title: payload.title ?? session.user.title,
+        initials,
+      }
+      return simulateLatency({ user }, 350)
+    },
+    async () => {
+      const { data } = await api.patch('/auth/profile', payload)
+      return data
+    },
+  )
+
+export const changePassword = ({ currentPassword, newPassword }) =>
+  withFallback(
+    async () => {
+      const session = sessionStore.get()
+      const account = DEMO_ACCOUNTS.find((a) => a.email === session?.user?.email)
+      if (account && account.password !== currentPassword) {
+        await reject('Your current password is incorrect.', 422)
+      }
+      return simulateLatency({ ok: true }, 350)
+    },
+    async () => {
+      const { data } = await api.post('/auth/password', { currentPassword, newPassword })
+      return data
+    },
+  )
+
+const authService = {
+  login,
+  register,
+  logout,
+  fetchProfile,
+  updateProfile,
+  changePassword,
+  sessionStore,
+  DEMO_ACCOUNTS,
+}
 export default authService

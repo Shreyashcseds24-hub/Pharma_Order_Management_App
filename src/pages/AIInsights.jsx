@@ -31,6 +31,7 @@ import { AXIS_PROPS, GRID_PROPS, SERIES_COLORS, compactCurrency, tooltipStyle } 
 import { useAsync } from '../hooks/useAsync'
 import { getAIInsights } from '../services/analyticsService'
 import { useAuth } from '../context/AuthContext'
+import { USE_MOCK_API } from '../services/api'
 import { cn, formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format'
 
 const URGENCY_TONES = {
@@ -106,8 +107,10 @@ export const AIInsights = () => {
 
   const handleReorder = (rec) => {
     toast(
-      `Requisition draft created for ${rec.suggestedQuantity} units of ${rec.title}. Purchase orders require the Flask backend.`,
-      { type: 'info', title: 'Demo action' },
+      USE_MOCK_API
+        ? `Requisition draft created for ${rec.suggestedQuantity} units of ${rec.title}. Purchase orders require the Flask backend.`
+        : `Suggested order: ${rec.suggestedQuantity} units of ${rec.title}. Purchase orders are not part of this release.`,
+      { type: 'info', title: USE_MOCK_API ? 'Demo action' : 'Reorder suggestion' },
     )
   }
 
@@ -375,7 +378,7 @@ export const AIInsights = () => {
           <div>
             <p className="text-sm font-bold text-slate-800">Model metadata</p>
             <p className="mt-0.5 text-xs text-app-muted">
-              Reported for transparency only. Values describe the demo heuristic, not a production model.
+              Reported for transparency only. Values describe the heuristic, not a production model.
             </p>
           </div>
           <dl className="flex flex-wrap gap-x-8 gap-y-2 text-xs">
