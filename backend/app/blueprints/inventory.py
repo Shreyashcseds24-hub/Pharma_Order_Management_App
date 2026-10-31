@@ -1,8 +1,9 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from ..errors import ApiError
 from ..extensions import db
+from ..logging_config import log_event
 from ..models import Batch, Inventory, StockMovement
 from ..permissions import load_current_user, require_permission
 from ..serializers import inventory_rows, movement_to_dict
@@ -89,12 +90,13 @@ def adjust_stock(batch_id):
 
     inventory.quantity = next_quantity
     movement_type = "Inbound" if delta > 0 else "Adjustment"
+    reference = next_business_id("adjustment", "ADJ", 113)
     add_movement(
         batch.medicine,
         batch,
         movement_type,
         delta,
-        next_business_id("adjustment", "ADJ", 113),
+        reference,
         user.name,
     )
     add_activity(
@@ -104,4 +106,17 @@ def adjust_stock(batch_id):
         user.name,
     )
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "inventory.adjusted",
+        batch_id=batch.id,
+        medicine_id=batch.medicine.id,
+        delta=delta,
+        previous_quantity=next_quantity - delta,
+        new_quantity=next_quantity,
+        movement_type=movement_type,
+        reference=reference,
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify(inventory_rows())

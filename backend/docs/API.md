@@ -8,8 +8,8 @@ two decimals.
 
 ## Authentication
 
-Every endpoint except `GET /health`, `POST /auth/login` and `POST /auth/register`
-requires a bearer token:
+Every endpoint except the health probes, `POST /auth/login` and
+`POST /auth/register` requires a bearer token:
 
 ```
 Authorization: Bearer <token>
@@ -58,14 +58,29 @@ from the authenticated user; it never accepts a retailer ID in the order payload
 
 ## Health
 
-### `GET /health`
+### `GET /health` and `GET /health/live`
 
-No authentication.
+No authentication. Liveness only — the process is running.
 
 ```json
 {
   "status": "ok",
   "service": "mediflow-api",
+  "time": "2026-10-31T09:15:04.221+00:00"
+}
+```
+
+### `GET /health/ready`
+
+No authentication. Verifies the database connection with `SELECT 1`. Returns
+`503` with `{"status": "unavailable", "database": "unavailable", ...}` when
+PostgreSQL is unreachable. No connection details or secrets are returned.
+
+```json
+{
+  "status": "ready",
+  "service": "mediflow-api",
+  "database": "ok",
   "time": "2026-10-31T09:15:04.221+00:00"
 }
 ```

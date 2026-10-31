@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 import re
 
 from flask import Blueprint, current_app, jsonify, request
@@ -11,6 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..errors import ApiError
 from ..extensions import db
+from ..logging_config import log_event
 from ..models import Retailer, Role, RevokedToken, User
 from ..permissions import load_current_user
 from ..serializers import user_to_dict
@@ -58,14 +60,41 @@ def login():
 
     user = User.query.filter(db.func.lower(User.email) == email).first()
     if user is None or not check_password_hash(user.password_hash, password):
+        log_event(
+            current_app.logger,
+            "auth.login.failed",
+            level=logging.WARNING,
+            reason="invalid_credentials",
+        )
         raise ApiError("Invalid email or password.", 401)
     if not user.is_active:
+        log_event(
+            current_app.logger,
+            "auth.login.failed",
+            level=logging.WARNING,
+            reason="disabled_account",
+            user_id=user.id,
+        )
         raise ApiError("This account has been disabled.", 403)
     if requested_role and str(requested_role).lower() != user.role.name:
+        log_event(
+            current_app.logger,
+            "auth.login.failed",
+            level=logging.WARNING,
+            reason="role_mismatch",
+            user_id=user.id,
+            role=user.role.name,
+        )
         raise ApiError(
             f"This account is registered as a {user.role.name}.", 403
         )
 
+    log_event(
+        current_app.logger,
+        "auth.login.succeeded",
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify(_session_payload(user))
 
 
@@ -98,6 +127,13 @@ def register():
 
     allowed = current_app.config.get("REGISTRATION_ALLOWED_ROLES", [])
     if requested_role not in allowed:
+        log_event(
+            current_app.logger,
+            "auth.register.denied",
+            level=logging.WARNING,
+            reason="role_not_allowed",
+            requested_role=requested_role,
+        )
         raise ApiError(
             "Self-registration is not enabled for that role.",
             403,
@@ -134,6 +170,12 @@ def register():
     )
     db.session.add(user)
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "auth.register.succeeded",
+        user_id=user.id,
+        role=role.name,
+    )
 
     return jsonify(_session_payload(user)), 201
 
@@ -165,6 +207,12 @@ def update_profile():
         user.title = str(payload.get("title") or "").strip()[:120]
 
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "auth.profile.updated",
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify({"user": user_to_dict(user)})
 
 
@@ -200,6 +248,13 @@ def change_password():
 
     user.password_hash = generate_password_hash(new_password)
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "auth.password.changed",
+        level=logging.INFO,
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify({"ok": True})
 
 
@@ -210,4 +265,11 @@ def logout():
     if jti and RevokedToken.query.filter_by(jti=jti).first() is None:
         db.session.add(RevokedToken(jti=jti))
         db.session.commit()
+    user = load_current_user()
+    log_event(
+        current_app.logger,
+        "auth.logout",
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify({"ok": True})

@@ -1,10 +1,11 @@
 from datetime import date
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from ..errors import ApiError
 from ..extensions import db
+from ..logging_config import log_event
 from ..models import Batch, Category, Inventory, Medicine, Supplier
 from ..permissions import load_current_user, require_permission
 from ..serializers import medicine_to_dict
@@ -119,6 +120,8 @@ def create_medicine():
     db.session.flush()
 
     batch_number = _text(payload, "batchNumber", "Batch number", max_length=60, required=False, default="")
+    batch = None
+    quantity = 0
     if batch_number:
         expiry = parse_date(payload.get("expiryDate"), "expiryDate", allow_past=False)
         quantity = parse_int(payload.get("quantity"), "quantity", minimum=0, default=0)
@@ -158,6 +161,25 @@ def create_medicine():
         load_current_user().name,
     )
     db.session.commit()
+    user = load_current_user()
+    log_event(
+        current_app.logger,
+        "medicine.created",
+        medicine_id=medicine.id,
+        user_id=user.id,
+        role=user.role.name,
+    )
+    if batch is not None and quantity > 0:
+        log_event(
+            current_app.logger,
+            "inventory.received",
+            medicine_id=medicine.id,
+            batch_id=batch.id,
+            quantity=quantity,
+            reference=f"GRN-{batch.batch_number}",
+            user_id=user.id,
+            role=user.role.name,
+        )
     return jsonify(medicine_to_dict(medicine)), 201
 
 
@@ -196,6 +218,14 @@ def update_medicine(medicine_id):
         load_current_user().name,
     )
     db.session.commit()
+    user = load_current_user()
+    log_event(
+        current_app.logger,
+        "medicine.updated",
+        medicine_id=medicine.id,
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify(medicine_to_dict(medicine))
 
 
@@ -211,4 +241,12 @@ def delete_medicine(medicine_id):
         load_current_user().name,
     )
     db.session.commit()
+    user = load_current_user()
+    log_event(
+        current_app.logger,
+        "medicine.archived",
+        medicine_id=medicine.id,
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify({"ok": True})

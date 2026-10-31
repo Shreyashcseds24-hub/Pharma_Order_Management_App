@@ -1,9 +1,10 @@
 from datetime import date
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, current_app, jsonify
 
 from ..errors import ApiError
 from ..extensions import db
+from ..logging_config import log_event
 from ..models import Invoice
 from ..permissions import load_current_user, require_roles
 from ..serializers import invoice_detail_to_dict, invoice_to_dict
@@ -53,4 +54,15 @@ def record_payment(invoice_id):
         user.name,
     )
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "invoice.payment_recorded",
+        invoice_id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        order_id=invoice.order_id,
+        total_amount=float(invoice.total_amount),
+        payment_status=invoice.payment_status,
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify(invoice_to_dict(invoice))

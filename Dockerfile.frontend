@@ -1,0 +1,31 @@
+FROM node:22-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY index.html vite.config.js ./
+COPY public ./public
+COPY src ./src
+
+# Production must use live API mode. The default relative URL is proxied to the
+# backend service by nginx, so no container needs to call localhost.
+ARG VITE_API_BASE_URL=/api
+ARG VITE_USE_MOCK_API=false
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_USE_MOCK_API=$VITE_USE_MOCK_API
+
+RUN npm run build
+
+FROM nginx:1.27-alpine AS runtime
+
+ENV BACKEND_UPSTREAM=http://backend:5000
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/healthz || exit 1

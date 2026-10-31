@@ -1,11 +1,13 @@
 from datetime import date, timedelta
 from decimal import Decimal
+import logging
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from ..errors import ApiError
 from ..extensions import db
+from ..logging_config import log_event
 from ..models import (
     Batch,
     Inventory,
@@ -244,19 +246,18 @@ def create_order():
     db.session.add(OrderEvent(order=order, label=STATUS_LABELS["Pending"], timestamp=utcnow(), done=True))
 
     invoice_number = next_counter("invoice_number", 1291)
-    db.session.add(
-        Invoice(
-            id=next_business_id("invoice", "INV", 9038),
-            invoice_number=f"MF/25-26/{invoice_number:05d}",
-            order=order,
-            retailer_id=order.retailer_id,
-            invoice_date=order.order_date,
-            due_date=order.order_date + timedelta(days=30),
-            total_amount=order.total_amount,
-            tax_amount=money(order.total_amount * Decimal("0.05")),
-            payment_status="Pending",
-        )
+    invoice = Invoice(
+        id=next_business_id("invoice", "INV", 9038),
+        invoice_number=f"MF/25-26/{invoice_number:05d}",
+        order=order,
+        retailer_id=order.retailer_id,
+        invoice_date=order.order_date,
+        due_date=order.order_date + timedelta(days=30),
+        total_amount=order.total_amount,
+        tax_amount=money(order.total_amount * Decimal("0.05")),
+        payment_status="Pending",
     )
+    db.session.add(invoice)
 
     add_activity(
         "order",
@@ -265,6 +266,26 @@ def create_order():
         user.name,
     )
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "order.created",
+        order_id=order.id,
+        retailer_id=order.retailer_id,
+        item_count=items_created,
+        total_amount=float(order.total_amount),
+        warehouse=order.warehouse,
+        user_id=user.id,
+        role=user.role.name,
+    )
+    log_event(
+        current_app.logger,
+        "invoice.created",
+        invoice_id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        order_id=order.id,
+        total_amount=float(invoice.total_amount),
+        tax_amount=float(invoice.tax_amount),
+    )
     return jsonify(order_to_dict(order)), 201
 
 
@@ -300,6 +321,8 @@ def update_order_status(order_id):
             {"status": f"Invalid transition from {order.status}."},
         )
 
+    previous_status = order.status
+    restored_units = 0
     if status == "Cancelled":
         for item in order.items:
             for allocation in item.allocations:
@@ -310,6 +333,7 @@ def update_order_status(order_id):
                     batch.inventory = Inventory(batch=batch, quantity=0)
                     db.session.flush()
                 batch.inventory.quantity += allocation.quantity
+                restored_units += allocation.quantity
                 add_movement(
                     item.medicine,
                     batch,
@@ -337,6 +361,18 @@ def update_order_status(order_id):
         user.name,
     )
     db.session.commit()
+    log_event(
+        current_app.logger,
+        "order.status_changed",
+        level=logging.INFO,
+        order_id=order.id,
+        from_status=previous_status,
+        to_status=status,
+        restored_units=restored_units,
+        total_amount=float(order.total_amount),
+        user_id=user.id,
+        role=user.role.name,
+    )
     return jsonify(order_to_dict(order))
 
 

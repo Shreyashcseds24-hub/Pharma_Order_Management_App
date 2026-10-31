@@ -34,11 +34,11 @@ createdb mediflow
 # or: psql -U postgres -c "CREATE DATABASE mediflow;"
 ```
 
-Apply the schema and load the demo dataset:
+Apply the schema and (optionally) load the demo dataset:
 
 ```bash
 flask --app run.py db upgrade
-flask --app run.py seed
+flask --app run.py seed        # development/demo only; never automatic
 ```
 
 Run the API:
@@ -47,7 +47,16 @@ Run the API:
 python run.py                   # http://127.0.0.1:5000/api
 ```
 
-Health check: `GET http://127.0.0.1:5000/api/health`.
+Health checks:
+
+- Liveness: `GET /api/health` or `GET /api/health/live`
+- Database readiness: `GET /api/health/ready` (`503` when PostgreSQL is unreachable)
+
+Create a production administrator without demo data:
+
+```bash
+flask --app run.py create-admin
+```
 
 > `python run.py` loads `backend/.env` before the Flask config is read. When using
 > the `flask` CLI, export the same variables or rely on the loaded `.env` file.
@@ -69,15 +78,22 @@ All settings come from environment variables; see [`.env.example`](.env.example)
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `APP_ENV` / `FLASK_ENV` | `development` | Set either to `production` to enable strict startup validation. |
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/mediflow` | SQLAlchemy URL. `postgres://` / `postgresql://` are rewritten to `postgresql+psycopg2://`. |
-| `JWT_SECRET_KEY` | insecure dev value | HMAC key for access tokens. Use at least 32 random bytes. |
+| `JWT_SECRET_KEY` | insecure dev value | HMAC key for access tokens. Production requires 32+ random characters. |
 | `SECRET_KEY` | falls back to `JWT_SECRET_KEY` | Flask signing key. |
 | `JWT_ACCESS_TOKEN_HOURS` | `12` | Access-token lifetime. |
-| `FLASK_ENV` | — | Standard Flask environment flag. |
-| `FLASK_DEBUG` | `1` | Set to `0` in production. |
+| `FLASK_DEBUG` | `0` in production, `1` in development | Set to `0` in production; validation rejects debug mode there. |
 | `HOST` / `PORT` | `127.0.0.1` / `5000` | Bind address for `python run.py`. |
-| `CORS_ORIGINS` | local Vite origins | Comma-separated allowed browser origins. |
-| `REGISTRATION_ALLOWED_ROLES` | `admin,distributor,retailer` | Roles a visitor can self-register. Restrict to `retailer` for a locked-down deployment. |
+| `CORS_ALLOWED_ORIGINS` | local Vite origins (empty in production) | Comma-separated allowed browser origins. `CORS_ORIGINS` is accepted as an alias. |
+| `REGISTRATION_ALLOWED_ROLES` | `retailer` in production | Roles a visitor can self-register. Privileged self-registration is rejected in production. |
+| `LOG_LEVEL` / `LOG_FORMAT` | `INFO` / `text` (`json` in production) | Structured logging controls. |
+| `RUN_MIGRATIONS` | `true` in Docker | Run Alembic before Gunicorn in the container entrypoint. |
+
+Production startup fails fast when the JWT/session secrets are weak or
+placeholders, `DATABASE_URL` is not PostgreSQL, debug is enabled, CORS contains
+`*`, or admin/distributor self-registration is enabled. See
+[`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md) for the full guide.
 
 Generate a real key:
 
@@ -95,6 +111,7 @@ database:
 ```bash
 pip install -r requirements-dev.txt
 pytest
+python -m pyflakes app tests run.py
 ```
 
 To run the exact same suite against PostgreSQL (required for the concurrent
@@ -194,6 +211,10 @@ flask --app run.py seed           # inserts the demo dataset if it is missing
 flask --app run.py seed --reset   # DESTRUCTIVE: drops all tables first
 ```
 
+Seeding is an explicit development/demo action. It is never run by the Docker
+entrypoint or application startup, and it refuses to run when users already
+exist. Do not use `--reset` against real data.
+
 The seed mirrors the frontend mock data: 40 medicines, batches, 8 retailers,
 24 orders, 14 invoices, stock movements, activity, notifications and the three
 demo users.
@@ -203,8 +224,9 @@ demo users.
 ```
 backend/
   app/
-    __init__.py          # app factory, JWT callbacks, blueprint registration
-    config.py            # env-driven config + PostgreSQL URL normalisation
+    __init__.py          # app factory, JWT callbacks, health probes, blueprint registration
+    config.py            # env-driven config, production validation, PostgreSQL URL normalisation
+    logging_config.py    # structured text/JSON logging and request ids
     extensions.py        # db, migrate, jwt, cors
     models.py            # SQLAlchemy schema and ID counters
     permissions.py       # role matrix and auth decorators
@@ -222,6 +244,8 @@ backend/
   migrations/            # Alembic environment and versions
   tests/                 # pytest suite (SQLite + PostgreSQL)
   docs/API.md            # endpoint reference
+  Dockerfile             # production Gunicorn image
+  docker-entrypoint.sh   # migrations then Gunicorn; never seeds
   run.py                 # development entry point
 ```
 
@@ -230,6 +254,14 @@ backend/
 - Passwords are hashed with Werkzeug; plaintext passwords are never stored.
 - JWTs are signed, expire, and can be revoked on logout via `revoked_tokens`.
 - CORS is limited to the configured frontend origins.
+- Production startup rejects weak/placeholder secrets, debug mode, non-PostgreSQL
+  URLs, wildcard CORS and privileged self-registration.
 - All totals, stock quantities and role checks are computed server-side; the API
   never trusts client-supplied prices, stock or roles.
 - Error responses are uniform: `{"message": "...", "status": 422, "errors": {...}}`.
+  Production 500 responses never include stack traces.
+- Structured logs cover startup, API/DB errors, authentication, order lifecycle,
+  inventory adjustments and invoices. Passwords, secrets and full tokens are
+  never logged; request bodies are never logged.
+- `/api/health` (`/live`) is a liveness probe; `/api/health/ready` verifies the
+  database without exposing connection details.

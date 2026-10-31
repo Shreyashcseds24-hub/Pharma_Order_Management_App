@@ -6,12 +6,42 @@ from dotenv import load_dotenv
 # Load backend/.env before importing the Config class (which reads env vars).
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from flask import Flask, jsonify  # noqa: E402
+import logging  # noqa: E402
 
-from .config import Config  # noqa: E402
+from flask import Flask, jsonify  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.engine import make_url  # noqa: E402
+from sqlalchemy.exc import SQLAlchemyError  # noqa: E402
+
+from .config import Config, is_production, validate_config  # noqa: E402
 from .errors import register_error_handlers  # noqa: E402
 from .extensions import cors, db, jwt, migrate  # noqa: E402
+from .logging_config import (  # noqa: E402
+    configure_logging,
+    log_event,
+    register_request_logging,
+)
 from .models import RevokedToken  # noqa: E402
+
+SERVICE_NAME = "mediflow-api"
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _database_target(app):
+    """Describe the DB target for startup logs without credentials."""
+    try:
+        url = make_url(app.config["SQLALCHEMY_DATABASE_URI"])
+        return {
+            "driver": url.get_backend_name(),
+            "host": url.host,
+            "port": url.port,
+            "database": url.database,
+        }
+    except Exception:  # pragma: no cover - defensive, never log the raw URL
+        return {"driver": "unknown"}
 
 
 def create_app(config_object=None):
@@ -23,16 +53,29 @@ def create_app(config_object=None):
         else:
             app.config.from_object(config_object)
 
+    validate_config(app)
+    if is_production(app.config):
+        app.config["DEBUG"] = False
+        app.config["TESTING"] = False
+        app.config["PROPAGATE_EXCEPTIONS"] = False
+
     app.json.sort_keys = False
+    configure_logging(app)
+    register_request_logging(app)
 
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     cors.init_app(
         app,
-        resources={r"/api/*": {"origins": app.config.get("CORS_ORIGINS", "*")}},
-        allow_headers=["Content-Type", "Authorization"],
+        resources={
+            r"/api/*": {
+                "origins": app.config.get("CORS_ALLOWED_ORIGINS") or [],
+            }
+        },
+        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        expose_headers=["X-Request-ID"],
     )
 
     @jwt.token_in_blocklist_loader
@@ -78,12 +121,47 @@ def create_app(config_object=None):
         app.register_blueprint(blueprint, url_prefix=prefix)
 
     @app.get("/api/health")
+    @app.get("/api/health/live")
     def health():
+        """Liveness: the process is running and able to serve requests."""
         return jsonify(
             {
                 "status": "ok",
-                "service": "mediflow-api",
-                "time": datetime.now(timezone.utc).isoformat(),
+                "service": SERVICE_NAME,
+                "time": _utc_now(),
+            }
+        )
+
+    @app.get("/api/health/ready")
+    def readiness():
+        """Readiness: the process can reach its database."""
+        try:
+            db.session.execute(text("SELECT 1"))
+        except SQLAlchemyError as error:
+            db.session.rollback()
+            log_event(
+                app.logger,
+                "health.database_unavailable",
+                level=logging.ERROR,
+                error_type=type(error).__name__,
+            )
+            return (
+                jsonify(
+                    {
+                        "status": "unavailable",
+                        "service": SERVICE_NAME,
+                        "database": "unavailable",
+                        "time": _utc_now(),
+                    }
+                ),
+                503,
+            )
+        return jsonify(
+            {
+                "status": "ready",
+                "service": SERVICE_NAME,
+                "database": "ok",
+                "time": _utc_now(),
             }
         )
 
@@ -92,5 +170,16 @@ def create_app(config_object=None):
     from .cli import register_cli
 
     register_cli(app)
+
+    log_event(
+        app.logger,
+        "application.startup",
+        environment=app.config.get("ENVIRONMENT"),
+        debug=bool(app.config.get("DEBUG")),
+        database=_database_target(app),
+        cors_origin_count=len(app.config.get("CORS_ALLOWED_ORIGINS") or []),
+        registration_roles=app.config.get("REGISTRATION_ALLOWED_ROLES"),
+        jwt_expiry_hours=app.config.get("JWT_ACCESS_TOKEN_HOURS"),
+    )
 
     return app

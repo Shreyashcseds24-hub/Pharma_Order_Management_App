@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pgdata/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+tests/
+docs/
+README.md
+requirements-dev.txt
