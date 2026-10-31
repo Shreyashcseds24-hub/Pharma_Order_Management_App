@@ -5,17 +5,20 @@ import { cn } from '../../utils/format'
 export const Logo = ({ collapsed = false, className }) => (
   <Link
     to="/dashboard"
-    className={cn('flex items-center gap-2.5 rounded-md', className)}
+    className={cn('flex items-center gap-2.5 rounded-xl', className)}
     aria-label="MediFlow AI home"
   >
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
-      <Plus className="h-4.5 w-4.5" size={18} strokeWidth={2.5} aria-hidden="true" />
+    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 text-white shadow-raised">
+      <span className="absolute inset-0 rounded-xl border border-white/25" aria-hidden="true" />
+      <Plus className="relative" size={18} strokeWidth={2.6} aria-hidden="true" />
     </span>
     {!collapsed ? (
       <span className="min-w-0">
-        <span className="block text-sm leading-tight font-semibold text-slate-900">MediFlow AI</span>
-        <span className="block text-[10px] leading-tight tracking-wide text-app-muted uppercase">
-          Pharma Operations
+        <span className="block text-sm leading-tight font-extrabold tracking-tight text-slate-900">
+          MediFlow AI
+        </span>
+        <span className="block text-[10px] leading-tight font-semibold tracking-[0.14em] text-app-muted uppercase">
+          Pharma Ops
         </span>
       </span>
     ) : null}

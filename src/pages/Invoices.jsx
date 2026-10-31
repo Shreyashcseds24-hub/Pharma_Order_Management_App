@@ -171,8 +171,15 @@ export const Invoices = () => {
       <Helmet title="Invoices & Payments" description="Invoice status, due dates and payment tracking." />
 
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Invoices and payments</h2>
-        <p className="text-sm text-app-muted">Track billing cycles and settle outstanding retailer invoices.</p>
+        <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+          Billing
+        </p>
+        <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+          Invoices and payments
+        </h2>
+        <p className="mt-0.5 text-sm text-app-muted">
+          Track billing cycles and settle outstanding retailer invoices.
+        </p>
       </div>
 
       <DemoBanner icon={ReceiptText}>
@@ -187,12 +194,21 @@ export const Invoices = () => {
           { label: 'Overdue', value: summary.overdue, icon: ReceiptText, tone: 'text-red-700' },
           { label: 'Settled invoices', value: summary.collected, icon: CheckCircle2, tone: 'text-emerald-700' },
         ].map(({ label, value, icon: Icon, tone }) => (
-          <Card key={label} className="p-4">
-            <div className="flex items-center gap-2 text-app-muted">
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              <p className="text-[11px] font-medium tracking-wide uppercase">{label}</p>
+          <Card
+            key={label}
+            className="p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop"
+          >
+            <div className="flex items-center gap-2.5 text-app-muted">
+              <span className="rounded-xl bg-app-surface p-1.5 text-slate-500 shadow-soft">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <p className="text-[10px] font-bold tracking-[0.1em] uppercase">{label}</p>
             </div>
-            {loading ? <Skeleton className="mt-2 h-7 w-20" /> : <p className={`mt-1.5 text-xl font-semibold ${tone}`}>{value}</p>}
+            {loading ? (
+              <Skeleton className="mt-2.5 h-7 w-20" />
+            ) : (
+              <p className={`mt-1.5 text-2xl font-extrabold tracking-tight ${tone}`}>{value}</p>
+            )}
           </Card>
         ))}
       </div>
@@ -317,7 +333,7 @@ export const Invoices = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 rounded-lg border border-app-border bg-slate-50/60 p-3.5 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/40 bg-app-surface/60 p-4 shadow-inset-sm sm:grid-cols-4">
               {[
                 ['Invoice date', formatDate(detail.invoiceDate)],
                 ['Due date', formatDate(detail.dueDate)],
@@ -331,17 +347,17 @@ export const Invoices = () => {
               ))}
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-app-border">
+            <div className="overflow-hidden rounded-2xl border border-app-border/60 bg-white/20">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-app-border bg-slate-50/70 text-xs text-slate-600 uppercase">
+                  <tr className="border-b border-app-border/60 text-[10px] font-bold tracking-[0.1em] text-slate-500 uppercase">
                     <th scope="col" className="px-3.5 py-2.5 text-left font-semibold">Description</th>
                     <th scope="col" className="px-3.5 py-2.5 text-right font-semibold">Qty</th>
                     <th scope="col" className="px-3.5 py-2.5 text-right font-semibold">Rate</th>
                     <th scope="col" className="px-3.5 py-2.5 text-right font-semibold">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-app-border">
+                <tbody className="divide-y divide-app-border/50">
                   {detail.items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-3.5 py-2.5">
@@ -355,7 +371,7 @@ export const Invoices = () => {
                   ))}
                 </tbody>
               </table>
-              <div className="space-y-1.5 border-t border-app-border bg-slate-50 px-3.5 py-3 text-sm">
+              <div className="space-y-1.5 border-t border-app-border/60 bg-white/30 px-4 py-3 text-sm">
                 <div className="flex justify-between text-app-muted">
                   <span>Taxable value</span>
                   <span>{formatCurrency(detail.totalAmount)}</span>
@@ -372,7 +388,7 @@ export const Invoices = () => {
             </div>
 
             {detail.paidOn ? (
-              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800">
+              <p className="rounded-2xl border border-emerald-200/60 bg-emerald-50/80 px-3.5 py-2.5 text-xs font-medium text-emerald-800 shadow-soft">
                 Payment received on {formatDate(detail.paidOn)}.
               </p>
             ) : null}

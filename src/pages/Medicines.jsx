@@ -114,7 +114,7 @@ const MedicineForm = ({ form, setForm, errors }) => {
       </Select>
 
       <div className="sm:col-span-2">
-        <p className="mb-3 flex items-center gap-2 border-t border-app-border pt-4 text-xs font-semibold tracking-wide text-slate-600 uppercase">
+        <p className="mb-3 flex items-center gap-2 border-t border-app-border/60 pt-4 text-[11px] font-bold tracking-[0.08em] text-slate-600 uppercase">
           <Beaker className="h-3.5 w-3.5" aria-hidden="true" />
           Opening batch (optional)
         </p>
@@ -350,8 +350,13 @@ export const Medicines = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Medicine catalog</h2>
-          <p className="text-sm text-app-muted">
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Catalog
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+            Medicine catalog
+          </h2>
+          <p className="mt-0.5 text-sm text-app-muted">
             {medicines?.length ?? 0} sample SKUs across {MEDICINE_CATEGORIES.length} categories.
           </p>
         </div>
@@ -360,7 +365,7 @@ export const Medicines = () => {
             Add Medicine
           </Button>
         ) : (
-          <span className="rounded-lg border border-app-border bg-slate-50 px-3 py-2 text-xs text-app-muted">
+          <span className="neu-soft rounded-xl px-3.5 py-2 text-xs font-medium text-app-muted">
             Catalog editing requires an administrator or distributor role.
           </span>
         )}
@@ -498,8 +503,8 @@ export const Medicines = () => {
           </>
         }
       >
-        <p className="text-sm text-slate-700">
-          Remove <span className="font-semibold">{confirmDelete?.name}</span> from the catalog? This
+        <p className="text-sm leading-relaxed text-slate-700">
+          Remove <span className="font-semibold text-slate-900">{confirmDelete?.name}</span> from the catalog? This
           also removes its batch records from the demo dataset. This action cannot be undone.
         </p>
       </Modal>

@@ -44,7 +44,7 @@ export const DataTable = ({
       <div className="scroll-thin hidden overflow-x-auto md:block">
         <table className="w-full min-w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-app-border bg-slate-50/70">
+            <tr className="border-b border-app-border/70">
               {columns.map((column) => (
                 <th
                   key={column.key}
@@ -57,7 +57,7 @@ export const DataTable = ({
                       : undefined
                   }
                   className={cn(
-                    'whitespace-nowrap px-4 py-3 text-xs font-semibold tracking-wide text-slate-600 uppercase',
+                    'whitespace-nowrap px-4 py-3 text-[11px] font-bold tracking-[0.08em] text-slate-500 uppercase',
                     column.align === 'right' ? 'text-right' : 'text-left',
                     column.className,
                   )}
@@ -67,7 +67,7 @@ export const DataTable = ({
                       type="button"
                       onClick={() => onSort(column.key)}
                       className={cn(
-                        'inline-flex items-center gap-1.5 transition hover:text-brand-700',
+                        'inline-flex items-center gap-1.5 transition-colors hover:text-brand-700',
                         column.align === 'right' && 'flex-row-reverse',
                       )}
                     >
@@ -81,21 +81,21 @@ export const DataTable = ({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-app-border">
+          <tbody className="divide-y divide-app-border/50">
             {rows.map((row, index) => (
               <tr
                 key={rowKey(row, index)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
-                  'transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-brand-50/40',
+                  'transition-colors duration-200',
+                  onRowClick && 'cursor-pointer hover:bg-white/40',
                 )}
               >
                 {columns.map((column) => (
                   <td
                     key={column.key}
                     className={cn(
-                      'px-4 py-3 align-middle text-slate-700',
+                      'px-4 py-3.5 align-middle text-slate-700',
                       column.align === 'right' ? 'text-right' : 'text-left',
                       column.cellClassName,
                     )}
@@ -109,11 +109,11 @@ export const DataTable = ({
         </table>
       </div>
 
-      <div className="divide-y divide-app-border md:hidden">
+      <div className="divide-y divide-app-border/50 md:hidden">
         {rows.map((row, index) => (
           <div
             key={rowKey(row, index)}
-            className={cn('p-4', onRowClick && 'cursor-pointer active:bg-brand-50/40')}
+            className={cn('p-4', onRowClick && 'cursor-pointer active:bg-white/40')}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
             role={onRowClick ? 'button' : undefined}
             tabIndex={onRowClick ? 0 : undefined}
@@ -143,30 +143,31 @@ export const DataTable = ({
       ) : null}
 
       {pageCount > 1 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-app-border px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-app-border/60 px-4 py-3">
           <p className="text-xs text-app-muted">
-            Showing <span className="font-medium text-slate-700">{from}</span>-
-            <span className="font-medium text-slate-700">{to}</span> of{' '}
-            <span className="font-medium text-slate-700">{total}</span>
+            Showing{' '}
+            <span className="font-bold text-slate-700">{from}</span>-
+            <span className="font-bold text-slate-700">{to}</span> of{' '}
+            <span className="font-bold text-slate-700">{total}</span>
           </p>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => onPageChange(page - 1)}
               disabled={page === 1}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-app-border px-2.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="neu-btn-inset inline-flex h-9 items-center gap-1 rounded-xl px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
               Prev
             </button>
-            <span className="px-2 text-xs font-medium text-slate-700">
+            <span className="neu-inset-sm rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700">
               {page} / {pageCount}
             </span>
             <button
               type="button"
               onClick={() => onPageChange(page + 1)}
               disabled={page === pageCount}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-app-border px-2.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="neu-btn-inset inline-flex h-9 items-center gap-1 rounded-xl px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
               <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

@@ -9,11 +9,11 @@ export const EmptyState = ({ icon: Icon, title, description, action, className, 
     )}
   >
     {Icon ? (
-      <span className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400">
+      <span className="mb-4 rounded-2xl bg-app-surface p-3.5 text-slate-400 shadow-soft">
         <Icon className="h-6 w-6" aria-hidden="true" />
       </span>
     ) : null}
-    <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+    <h3 className="text-sm font-bold text-slate-800">{title}</h3>
     {description ? <p className="mt-1 max-w-sm text-sm text-app-muted">{description}</p> : null}
     {action ? <div className="mt-4">{action}</div> : null}
   </div>
@@ -22,18 +22,19 @@ export const EmptyState = ({ icon: Icon, title, description, action, className, 
 export const ErrorState = ({ title = 'Something went wrong', message, onRetry, className }) => (
   <div
     className={cn(
-      'flex flex-col items-center justify-center rounded-lg border border-dashed border-red-200 bg-red-50/50 px-6 py-10 text-center',
+      'flex flex-col items-center justify-center rounded-[1.25rem] border border-red-200/60 bg-red-50/60 px-6 py-10 text-center',
+      'shadow-inset-sm',
       className,
     )}
     role="alert"
   >
-    <h3 className="text-sm font-semibold text-red-800">{title}</h3>
+    <h3 className="text-sm font-bold text-red-800">{title}</h3>
     {message ? <p className="mt-1 max-w-md text-sm text-red-700">{message}</p> : null}
     {onRetry ? (
       <button
         type="button"
         onClick={onRetry}
-        className="mt-4 rounded-lg bg-red-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+        className="neu-btn-danger mt-4 inline-flex h-10 items-center rounded-[0.95rem] px-4 text-sm font-semibold"
       >
         Try again
       </button>
@@ -44,7 +45,8 @@ export const ErrorState = ({ title = 'Something went wrong', message, onRetry, c
 export const DemoBanner = ({ children, className, icon: Icon }) => (
   <div
     className={cn(
-      'flex items-start gap-2.5 rounded-lg border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-xs text-brand-800',
+      'flex items-start gap-2.5 rounded-2xl border border-brand-200/60 bg-brand-50/70 px-4 py-3 text-xs text-brand-800',
+      'shadow-soft',
       className,
     )}
   >

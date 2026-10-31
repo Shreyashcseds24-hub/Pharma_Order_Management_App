@@ -58,16 +58,18 @@ const SalesChart = ({ series, range, onRangeChange, loading }) => {
         description="Revenue and order volume across the selected range"
         icon={TrendingUp}
         action={
-          <div className="flex rounded-lg border border-app-border p-0.5" role="group" aria-label="Select time range">
+          <div
+            className="neu-segmented flex rounded-xl p-1"
+            role="group"
+            aria-label="Select time range"
+          >
             {RANGES.map((r) => (
               <button
                 key={r.key}
                 type="button"
                 onClick={() => onRangeChange(r.key)}
                 aria-pressed={range === r.key}
-                className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
-                  range === r.key ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                }`}
+                className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500"
               >
                 {r.label}
               </button>
@@ -139,11 +141,14 @@ const StockBar = ({ quantity, reorderLevel }) => {
   const tone = quantity <= reorderLevel ? 'bg-red-500' : quantity <= reorderLevel * 1.5 ? 'bg-amber-500' : 'bg-emerald-500'
 
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-      <div className="relative h-full rounded-full bg-slate-100">
-        <div className={cn('h-full rounded-full', tone)} style={{ width: `${pct}%` }} />
+    <div className="neu-track h-2 w-full overflow-hidden rounded-full">
+      <div className="relative h-full rounded-full">
         <div
-          className="absolute top-0 h-full w-px bg-slate-400"
+          className={cn('h-full rounded-full shadow-[0_1px_2px_rgba(64,91,122,0.25)]', tone)}
+          style={{ width: `${pct}%` }}
+        />
+        <div
+          className="absolute top-0 h-full w-px bg-slate-500/70"
           style={{ left: `${reorderPct}%` }}
           aria-hidden="true"
           title={`Reorder level ${reorderLevel}`}
@@ -216,12 +221,12 @@ const InsightsPanel = ({ insights, loading }) => (
         <>
           <ul className="space-y-3">
             {insights.recommendations.map((rec) => (
-              <li key={rec.id} className="rounded-lg border border-app-border bg-slate-50/60 p-3">
+              <li key={rec.id} className="neu-inset-sm rounded-2xl border border-white/40 p-3.5">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-800">{rec.title}</p>
+                  <p className="text-sm font-semibold text-slate-800">{rec.title}</p>
                   <span
                     className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                      'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold shadow-soft',
                       rec.urgency === 'critical'
                         ? 'bg-red-100 text-red-700'
                         : rec.urgency === 'high'
@@ -245,7 +250,7 @@ const InsightsPanel = ({ insights, loading }) => (
               {insights.stockoutRisk.map((risk) => (
                 <li
                   key={risk.medicineId}
-                  className="flex items-center justify-between gap-2 rounded-md border border-app-border px-3 py-2"
+                  className="neu-inset-sm flex items-center justify-between gap-2 rounded-xl px-3 py-2"
                 >
                   <span className="truncate text-sm text-slate-700">{risk.name}</span>
                   <span
@@ -378,10 +383,13 @@ export const Dashboard = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Operations overview
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
             Welcome back, {user?.name?.split(' ')[0] ?? 'there'}
           </h2>
-          <p className="text-sm text-app-muted">{roleHint}</p>
+          <p className="mt-0.5 text-sm text-app-muted">{roleHint}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button as={Link} to="/orders" variant="secondary" size="sm" icon={ShoppingCart}>

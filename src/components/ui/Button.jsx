@@ -3,18 +3,18 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '../../utils/format'
 
 const VARIANTS = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-300',
-  secondary: 'bg-white text-brand-700 border border-brand-200 hover:bg-brand-50',
-  accent: 'bg-accent-600 text-white hover:bg-accent-700 disabled:bg-accent-300',
-  ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300',
-  subtle: 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+  primary: 'neu-btn-primary',
+  secondary: 'neu-btn text-brand-700',
+  accent: 'neu-btn-accent',
+  ghost: 'text-slate-600 hover:bg-white/50 hover:text-slate-900 active:shadow-inset-sm',
+  danger: 'neu-btn-danger',
+  subtle: 'neu-btn-inset',
 }
 
 const SIZES = {
-  sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-9 px-3.5 text-sm gap-2',
-  lg: 'h-11 px-5 text-sm gap-2',
+  sm: 'h-9 px-3.5 text-xs gap-1.5',
+  md: 'h-10 px-4 text-sm gap-2',
+  lg: 'h-12 px-6 text-sm gap-2',
 }
 
 export const Button = forwardRef(function Button(
@@ -41,8 +41,9 @@ export const Button = forwardRef(function Button(
       disabled={isNativeButton ? disabled || loading : undefined}
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-lg font-medium whitespace-nowrap transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-70',
+        'inline-flex items-center justify-center rounded-[0.95rem] font-semibold whitespace-nowrap',
+        'transition-[color,background-color,box-shadow,transform,filter] duration-200',
+        'disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none',
         SIZES[size],
         VARIANTS[variant],
         className,
@@ -59,3 +60,5 @@ export const Button = forwardRef(function Button(
     </Component>
   )
 })
+
+export default Button

@@ -38,12 +38,18 @@ const PIE_COLORS = [
 ]
 
 const KpiCard = ({ label, value, hint, icon: Icon, tone = 'text-brand-700', loading }) => (
-  <Card className="p-4">
-    <div className="flex items-center gap-2 text-app-muted">
-      <Icon className="h-4 w-4" aria-hidden="true" />
-      <p className="text-[11px] font-medium tracking-wide uppercase">{label}</p>
+  <Card className="p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop">
+    <div className="flex items-center gap-2.5 text-app-muted">
+      <span className="rounded-xl bg-app-surface p-1.5 text-slate-500 shadow-soft">
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <p className="text-[10px] font-bold tracking-[0.1em] uppercase">{label}</p>
     </div>
-    {loading ? <Skeleton className="mt-2 h-7 w-24" /> : <p className={`mt-1.5 text-xl font-semibold ${tone}`}>{value}</p>}
+    {loading ? (
+      <Skeleton className="mt-2.5 h-7 w-24" />
+    ) : (
+      <p className={`mt-1.5 text-2xl font-extrabold tracking-tight ${tone}`}>{value}</p>
+    )}
     {hint ? <p className="mt-1 text-xs text-app-muted">{hint}</p> : null}
   </Card>
 )
@@ -74,8 +80,15 @@ export const Reports = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Reports and analytics</h2>
-          <p className="text-sm text-app-muted">Sales, order volume, valuation, movement and expiry exposure.</p>
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Analytics
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+            Reports and analytics
+          </h2>
+          <p className="mt-0.5 text-sm text-app-muted">
+            Sales, order volume, valuation, movement and expiry exposure.
+          </p>
         </div>
         <Button variant="secondary" icon={Download} onClick={exportReport} disabled={!data}>
           Export CSV
@@ -160,7 +173,7 @@ export const Reports = () => {
                       height={28}
                       iconType="circle"
                       iconSize={7}
-                      wrapperStyle={{ fontSize: 12, color: '#64748b' }}
+                      wrapperStyle={{ fontSize: 12, fontWeight: 600, color: '#718096' }}
                     />
                     <Line
                       yAxisId="revenue"
@@ -232,7 +245,7 @@ export const Reports = () => {
                   header: 'Medicine',
                   render: (row) => (
                     <div>
-                      <p className="font-medium text-slate-800">{row.name}</p>
+                      <p className="font-semibold text-slate-800">{row.name}</p>
                       <p className="text-xs text-app-muted">{row.brand}</p>
                     </div>
                   ),
@@ -242,7 +255,7 @@ export const Reports = () => {
                   key: 'units',
                   header: 'Units',
                   align: 'right',
-                  render: (row) => <span className="font-medium text-slate-800">{formatNumber(row.units)}</span>,
+                  render: (row) => <span className="font-semibold text-slate-800">{formatNumber(row.units)}</span>,
                 },
                 {
                   key: 'revenue',
@@ -288,18 +301,18 @@ export const Reports = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-3 space-y-1.5 border-t border-app-border/50 pt-3">
                   {(data?.inventoryValuation.categoryBreakdown ?? []).slice(0, 5).map((entry, index) => (
                     <li key={entry.category} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="flex items-center gap-2 text-slate-600">
+                      <span className="flex items-center gap-2 font-medium text-slate-600">
                         <span
-                          className="h-2.5 w-2.5 rounded-sm"
+                          className="h-2.5 w-2.5 rounded-[3px] shadow-[0_1px_2px_rgba(64,91,122,0.3)]"
                           style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
                           aria-hidden="true"
                         />
                         {entry.category}
                       </span>
-                      <span className="font-medium text-slate-800">
+                      <span className="font-bold text-slate-800">
                         {formatCurrency(entry.value, { compact: true })}
                       </span>
                     </li>
@@ -374,10 +387,10 @@ export const Reports = () => {
                   <span
                     className={
                       row.daysToExpiry <= 30
-                        ? 'font-semibold text-red-600'
+                        ? 'rounded-full bg-red-50 px-2.5 py-0.5 font-bold text-red-700 shadow-soft'
                         : row.daysToExpiry <= 60
-                          ? 'font-semibold text-amber-700'
-                          : 'text-slate-700'
+                          ? 'rounded-full bg-amber-50 px-2.5 py-0.5 font-bold text-amber-700 shadow-soft'
+                          : 'font-medium text-slate-700'
                     }
                   >
                     {row.daysToExpiry}

@@ -1,7 +1,10 @@
 import { cn } from '../../utils/format'
 
 export const Skeleton = ({ className }) => (
-  <div className={cn('animate-pulse rounded-md bg-slate-200/80', className)} aria-hidden="true" />
+  <div
+    className={cn('animate-pulse rounded-lg bg-slate-200/70', className)}
+    aria-hidden="true"
+  />
 )
 
 export const SkeletonText = ({ lines = 3, className }) => (
@@ -13,7 +16,7 @@ export const SkeletonText = ({ lines = 3, className }) => (
 )
 
 export const SkeletonTable = ({ rows = 5, cols = 5 }) => (
-  <div className="divide-y divide-app-border">
+  <div className="divide-y divide-app-border/60">
     {Array.from({ length: rows }).map((_, r) => (
       <div key={r} className="flex items-center gap-4 px-4 py-3.5">
         {Array.from({ length: cols }).map((_, c) => (
@@ -27,9 +30,9 @@ export const SkeletonTable = ({ rows = 5, cols = 5 }) => (
 export const SkeletonCards = ({ count = 4 }) => (
   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
     {Array.from({ length: count }).map((_, i) => (
-      <div key={i} className="card p-4">
+      <div key={i} className="card p-5">
         <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-3 h-7 w-16" />
+        <Skeleton className="mt-4 h-8 w-16" />
         <Skeleton className="mt-3 h-3 w-32" />
       </div>
     ))}

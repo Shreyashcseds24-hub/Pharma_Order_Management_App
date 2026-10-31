@@ -99,7 +99,7 @@ const OrderDrawer = ({ order, onClose, onStatusChange, busy, canApprove }) => {
       }
     >
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 rounded-lg border border-app-border bg-slate-50/60 p-3.5">
+        <div className="grid grid-cols-2 gap-3 rounded-2xl border border-white/40 bg-app-surface/60 p-4 shadow-inset-sm">
           {[
             ['Status', <StatusBadge key="s" status={order.status} size="sm" />],
             ['Items', formatNumber(order.itemCount)],
@@ -119,8 +119,8 @@ const OrderDrawer = ({ order, onClose, onStatusChange, busy, canApprove }) => {
           <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-600 uppercase">
             Itemised medicines
           </h3>
-          <div className="overflow-hidden rounded-lg border border-app-border">
-            <ul className="divide-y divide-app-border">
+          <div className="overflow-hidden rounded-2xl border border-app-border/60 bg-white/20">
+            <ul className="divide-y divide-app-border/50">
               {order.items.map((item) => (
                 <li key={item.id} className="flex items-start justify-between gap-3 px-3.5 py-3">
                   <div className="min-w-0">
@@ -138,7 +138,7 @@ const OrderDrawer = ({ order, onClose, onStatusChange, busy, canApprove }) => {
                 </li>
               ))}
             </ul>
-            <div className="flex items-center justify-between bg-slate-50 px-3.5 py-3">
+            <div className="flex items-center justify-between border-t border-app-border/60 bg-white/30 px-4 py-3">
               <span className="text-sm font-medium text-slate-700">Order total</span>
               <span className="text-base font-semibold text-slate-900">{formatCurrency(order.totalAmount)}</span>
             </div>
@@ -155,9 +155,9 @@ const OrderDrawer = ({ order, onClose, onStatusChange, busy, canApprove }) => {
 }
 
 const CartLine = ({ line, onQuantity, onRemove }) => (
-  <div className="flex items-start gap-3 border-b border-app-border px-3.5 py-3 last:border-b-0">
+  <div className="flex items-start gap-3 border-b border-app-border/50 px-3.5 py-3 last:border-b-0">
     <div className="min-w-0 flex-1">
-      <p className="text-sm font-medium text-slate-800">{line.name}</p>
+      <p className="text-sm font-bold text-slate-800">{line.name}</p>
       <p className="text-xs text-app-muted">
         {line.brand} &middot; {line.packSize}
       </p>
@@ -166,11 +166,11 @@ const CartLine = ({ line, onQuantity, onRemove }) => (
       </p>
     </div>
     <div className="flex shrink-0 flex-col items-end gap-2">
-      <div className="flex items-center rounded-lg border border-app-border">
+      <div className="flex items-center rounded-xl bg-app-surface shadow-inset-sm">
         <button
           type="button"
           onClick={() => onQuantity(line.id, -1)}
-          className="px-2 py-1 text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+          className="px-2 py-1 text-slate-600 transition hover:bg-white/50 active:shadow-inset-sm disabled:opacity-40"
           disabled={line.quantity <= 1}
           aria-label={`Decrease ${line.name}`}
         >
@@ -182,13 +182,13 @@ const CartLine = ({ line, onQuantity, onRemove }) => (
           max={line.stock}
           value={line.quantity}
           onChange={(e) => onQuantity(line.id, 0, e.target.value)}
-          className="w-12 border-x border-app-border py-1 text-center text-sm text-slate-800 focus:outline-none"
+          className="w-12 border-x border-app-border/50 bg-transparent py-1 text-center text-sm font-semibold text-slate-800 focus:outline-none"
           aria-label={`Quantity for ${line.name}`}
         />
         <button
           type="button"
           onClick={() => onQuantity(line.id, 1)}
-          className="px-2 py-1 text-slate-600 transition hover:bg-slate-100 disabled:opacity-40"
+          className="px-2 py-1 text-slate-600 transition hover:bg-white/50 active:shadow-inset-sm disabled:opacity-40"
           disabled={line.quantity >= line.stock}
           aria-label={`Increase ${line.name}`}
         >
@@ -365,7 +365,7 @@ const NewOrderModal = ({ open, onClose, onCreated }) => {
 
           <div>
             <p className="mb-2 text-xs font-medium text-slate-700">Results</p>
-            <ul className="divide-y divide-app-border overflow-hidden rounded-lg border border-app-border">
+            <ul className="scroll-thin max-h-72 divide-y divide-app-border/50 overflow-y-auto rounded-2xl border border-white/40 bg-white/20 shadow-inset-sm">
               {matches.length === 0 ? (
                 <li>
                   <EmptyState compact title="No medicines found" description="Try a different search term." />
@@ -423,7 +423,7 @@ const NewOrderModal = ({ open, onClose, onCreated }) => {
               <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
               Order summary
             </p>
-            <div className="overflow-hidden rounded-lg border border-app-border">
+            <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/20 shadow-inset-sm">
               {cart.length === 0 ? (
                 <p className="px-3.5 py-8 text-center text-sm text-app-muted">
                   Your cart is empty. Add medicines from the list.
@@ -438,7 +438,7 @@ const NewOrderModal = ({ open, onClose, onCreated }) => {
                   />
                 ))
               )}
-              <div className="space-y-1.5 bg-slate-50 px-3.5 py-3">
+              <div className="space-y-1.5 border-t border-app-border/60 bg-white/30 px-3.5 py-3">
                 <div className="flex justify-between text-xs text-app-muted">
                   <span>Subtotal</span>
                   <span>{formatCurrency(total)}</span>
@@ -456,7 +456,7 @@ const NewOrderModal = ({ open, onClose, onCreated }) => {
           </div>
 
           {formError ? (
-            <p className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700" role="alert">
+            <p className="flex items-start gap-2 rounded-2xl border border-red-200/60 bg-red-50/80 px-3.5 py-2.5 text-xs font-medium text-red-700 shadow-soft" role="alert">
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               {formError}
             </p>
@@ -616,10 +616,13 @@ export const Orders = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Fulfilment
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
             {permissions.placeOrders && !permissions.approveOrders ? 'My orders' : 'Order management'}
           </h2>
-          <p className="text-sm text-app-muted">
+          <p className="mt-0.5 text-sm text-app-muted">
             {permissions.approveOrders
               ? 'Review retailer orders, approve or reject, and monitor fulfilment.'
               : 'Track the status of orders placed by your pharmacy.'}
@@ -648,10 +651,8 @@ export const Orders = () => {
             }}
             aria-pressed={status === s}
             className={cn(
-              'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition',
-              status === s
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-app-border bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700',
+              'shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200',
+              status === s ? 'neu-chip-active' : 'neu-chip text-slate-600',
             )}
           >
             {s === 'all' ? 'All orders' : s}

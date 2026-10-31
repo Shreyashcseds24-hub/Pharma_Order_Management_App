@@ -267,8 +267,13 @@ export const Inventory = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Batch inventory</h2>
-          <p className="text-sm text-app-muted">
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Stock control
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+            Batch inventory
+          </h2>
+          <p className="mt-0.5 text-sm text-app-muted">
             FEFO tracked batches across both demo warehouses.
           </p>
         </div>
@@ -291,12 +296,21 @@ export const Inventory = () => {
           { label: 'Low-stock batches', value: summary.lowStock, icon: TrendingDown, tone: 'text-amber-700', load: loading },
           { label: 'Near-expiry batches', value: summary.nearExpiry, icon: CalendarClock, tone: 'text-red-700', load: loading },
         ].map(({ label, value, icon: Icon, tone, load }) => (
-          <Card key={label} className="p-4">
-            <div className="flex items-center gap-2 text-app-muted">
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              <p className="text-[11px] font-medium tracking-wide uppercase">{label}</p>
+          <Card
+            key={label}
+            className="p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop"
+          >
+            <div className="flex items-center gap-2.5 text-app-muted">
+              <span className="rounded-xl bg-app-surface p-1.5 text-slate-500 shadow-soft">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <p className="text-[10px] font-bold tracking-[0.1em] uppercase">{label}</p>
             </div>
-            {load ? <Skeleton className="mt-2 h-7 w-20" /> : <p className={`mt-1.5 text-xl font-semibold ${tone}`}>{value}</p>}
+            {load ? (
+              <Skeleton className="mt-2.5 h-7 w-20" />
+            ) : (
+              <p className={`mt-1.5 text-2xl font-extrabold tracking-tight ${tone}`}>{value}</p>
+            )}
           </Card>
         ))}
       </div>
@@ -433,7 +447,7 @@ export const Inventory = () => {
         }
       >
         <form id="adjust-form" onSubmit={submitAdjustment} noValidate className="space-y-4">
-          <div className="rounded-lg border border-app-border bg-slate-50 px-3.5 py-3">
+          <div className="rounded-2xl border border-white/40 bg-app-surface/60 px-4 py-3.5 shadow-inset-sm">
             <div className="flex items-center justify-between text-xs">
               <span className="text-app-muted">Units on hand</span>
               <span className="font-semibold text-slate-800">{formatNumber(adjustRow?.quantity ?? 0)}</span>
@@ -455,10 +469,10 @@ export const Inventory = () => {
                 role="radio"
                 aria-checked={adjustForm.direction === key}
                 onClick={() => setAdjustForm({ ...adjustForm, direction: key })}
-                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   adjustForm.direction === key
-                    ? 'border-brand-600 bg-brand-50 text-brand-700 ring-1 ring-brand-600'
-                    : 'border-app-border bg-white text-slate-600 hover:border-brand-300'
+                    ? 'neu-chip-active'
+                    : 'neu-chip text-slate-600'
                 }`}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
@@ -501,7 +515,7 @@ export const Inventory = () => {
             placeholder="Reference number, supervisor approval, reason detail..."
           />
 
-          <p className="flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2.5 text-xs text-brand-800">
+          <p className="flex items-start gap-2 rounded-2xl bg-brand-50/80 px-3.5 py-3 text-xs font-medium text-brand-800 shadow-soft">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             Stock can never fall below zero. Adjustments are posted to the movement ledger and cannot be
             undone from this screen.

@@ -34,9 +34,9 @@ import { useAuth } from '../context/AuthContext'
 import { cn, formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format'
 
 const URGENCY_TONES = {
-  critical: 'bg-red-50 text-red-700 ring-red-200',
-  high: 'bg-amber-50 text-amber-800 ring-amber-200',
-  medium: 'bg-brand-50 text-brand-700 ring-brand-200',
+  critical: 'bg-red-50 text-red-700 ring-red-200/70',
+  high: 'bg-amber-50 text-amber-800 ring-amber-200/70',
+  medium: 'bg-brand-50 text-brand-700 ring-brand-200/70',
 }
 
 const HORIZONS = [
@@ -45,10 +45,10 @@ const HORIZONS = [
 ]
 
 const RecommendationCard = ({ rec, onReorder }) => (
-  <li className="rounded-lg border border-app-border bg-white p-4 transition-shadow hover:shadow-soft">
+  <li className="neu-soft rounded-[1.25rem] border border-white/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-900">{rec.title}</p>
+        <p className="text-sm font-bold text-slate-900">{rec.title}</p>
         <p className="mt-1 text-xs text-app-muted">
           Stock {formatNumber(rec.currentStock)} units &middot; reorder level {formatNumber(rec.reorderLevel)}
         </p>
@@ -60,17 +60,19 @@ const RecommendationCard = ({ rec, onReorder }) => (
       </div>
     </div>
 
-    <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">{rec.reason}</p>
+    <p className="neu-inset-sm mt-3 rounded-xl border border-white/40 px-3.5 py-2.5 text-xs leading-relaxed text-slate-600">
+      {rec.reason}
+    </p>
 
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-4">
         <div>
-          <p className="text-[11px] tracking-wide text-app-muted uppercase">Suggested order</p>
-          <p className="text-lg font-semibold text-slate-900">+{formatNumber(rec.suggestedQuantity)}</p>
+          <p className="text-[10px] font-bold tracking-[0.1em] text-app-muted uppercase">Suggested order</p>
+          <p className="text-lg font-extrabold tracking-tight text-slate-900">+{formatNumber(rec.suggestedQuantity)}</p>
         </div>
         <div>
-          <p className="text-[11px] tracking-wide text-app-muted uppercase">Confidence</p>
-          <p className="text-sm font-semibold text-slate-700">{formatPercent(rec.confidence)}</p>
+          <p className="text-[10px] font-bold tracking-[0.1em] text-app-muted uppercase">Confidence</p>
+          <p className="text-sm font-bold text-slate-700">{formatPercent(rec.confidence)}</p>
         </div>
       </div>
       <Button size="sm" variant="secondary" icon={PackagePlus} onClick={() => onReorder(rec)}>
@@ -115,22 +117,28 @@ export const AIInsights = () => {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">AI demand insights</h2>
-          <p className="text-sm text-app-muted">
+          <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+            Intelligence
+          </p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+            AI demand insights
+          </h2>
+          <p className="mt-0.5 text-sm text-app-muted">
             Forecasts, replenishment suggestions and stockout exposure for the next {horizon} days.
           </p>
         </div>
-        <div className="flex rounded-lg border border-app-border p-0.5" role="group" aria-label="Select forecast horizon">
+        <div
+          className="neu-segmented flex rounded-xl p-1"
+          role="group"
+          aria-label="Select forecast horizon"
+        >
           {HORIZONS.map((h) => (
             <button
               key={h.days}
               type="button"
               onClick={() => setHorizon(h.days)}
               aria-pressed={horizon === h.days}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-medium transition',
-                horizon === h.days ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100',
-              )}
+              className="rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500"
             >
               {h.label}
             </button>
@@ -152,12 +160,18 @@ export const AIInsights = () => {
           { label: 'Recommendations', value: data?.recommendations?.length ?? 0, icon: PackagePlus, tone: 'text-amber-700' },
           { label: 'Stockout warnings', value: data?.stockoutRisk?.length ?? 0, icon: ShieldAlert, tone: 'text-red-700' },
         ].map(({ label, value, icon: Icon, tone }) => (
-          <Card key={label} className="p-4">
-            <div className="flex items-center gap-2 text-app-muted">
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              <p className="text-[11px] font-medium tracking-wide uppercase">{label}</p>
+          <Card key={label} className="p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop">
+            <div className="flex items-center gap-2.5 text-app-muted">
+              <span className="rounded-xl bg-app-surface p-1.5 text-slate-500 shadow-soft">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <p className="text-[10px] font-bold tracking-[0.1em] uppercase">{label}</p>
             </div>
-            {loading ? <Skeleton className="mt-2 h-7 w-28" /> : <p className={`mt-1.5 truncate text-lg font-semibold ${tone}`}>{value}</p>}
+            {loading ? (
+              <Skeleton className="mt-2.5 h-7 w-28" />
+            ) : (
+              <p className={`mt-1.5 truncate text-2xl font-extrabold tracking-tight ${tone}`}>{value}</p>
+            )}
           </Card>
         ))}
       </div>
@@ -181,7 +195,7 @@ export const AIInsights = () => {
                     <YAxis {...AXIS_PROPS} width={46} tickFormatter={compactCurrency} />
                     <Tooltip
                       {...tooltipStyle}
-                      cursor={{ fill: 'rgba(23,78,166,0.05)' }}
+                      cursor={{ fill: 'rgba(108,99,255,0.06)' }}
                       formatter={(value, name) => [
                         `${formatNumber(value)} units`,
                         name === 'predicted' ? 'Predicted demand' : 'Actual issued',
@@ -192,7 +206,7 @@ export const AIInsights = () => {
                       height={28}
                       iconType="circle"
                       iconSize={7}
-                      wrapperStyle={{ fontSize: 12, color: '#64748b' }}
+                      wrapperStyle={{ fontSize: 12, fontWeight: 600, color: '#718096' }}
                     />
                     <Bar dataKey="predicted" name="predicted" fill={SERIES_COLORS.brand} radius={[3, 3, 0, 0]} barSize={12} />
                     <Bar dataKey="actual" name="actual" fill={SERIES_COLORS.accent} radius={[3, 3, 0, 0]} barSize={12} />
@@ -231,7 +245,7 @@ export const AIInsights = () => {
                       height={28}
                       iconType="circle"
                       iconSize={7}
-                      wrapperStyle={{ fontSize: 12, color: '#64748b' }}
+                      wrapperStyle={{ fontSize: 12, fontWeight: 600, color: '#718096' }}
                     />
                     <Line type="monotone" dataKey="actual" name="actual" stroke={SERIES_COLORS.accent} strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
                     <Line type="monotone" dataKey="predicted" name="predicted" stroke={SERIES_COLORS.brand} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} />
@@ -274,7 +288,7 @@ export const AIInsights = () => {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader title="Stockout risk" description="Estimated days of cover remaining" icon={ShieldAlert} />
-          <div className="divide-y divide-app-border">
+          <div className="divide-y divide-app-border/50">
             {loading ? (
               <div className="space-y-3 p-4">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -285,19 +299,22 @@ export const AIInsights = () => {
               <EmptyState compact title="No stockout risk detected" description="All tracked SKUs have adequate cover." />
             ) : (
               (data?.stockoutRisk ?? []).map((risk) => (
-                <div key={risk.medicineId} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div
+                  key={risk.medicineId}
+                  className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-white/30"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">{risk.name}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{risk.name}</p>
                     <span
                       className={cn(
-                        'mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                        'mt-1 inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset',
                         URGENCY_TONES[risk.risk] ?? URGENCY_TONES.medium,
                       )}
                     >
                       {risk.risk} risk
                     </span>
                   </div>
-                  <p className="shrink-0 text-sm font-semibold text-slate-800">
+                  <p className="shrink-0 text-sm font-extrabold text-slate-800">
                     {risk.daysToStockout} days
                   </p>
                 </div>
@@ -312,7 +329,7 @@ export const AIInsights = () => {
             description="Batches expiring within 90 days"
             icon={CalendarClock}
           />
-          <div className="scroll-thin max-h-96 divide-y divide-app-border overflow-y-auto">
+          <div className="scroll-thin max-h-96 divide-y divide-app-border/50 overflow-y-auto">
             {loading ? (
               <div className="space-y-3 p-4">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -323,9 +340,12 @@ export const AIInsights = () => {
               <EmptyState compact title="No near-expiry batches" description="No batch expires within the next 90 days." />
             ) : (
               (data?.expiryRisk ?? []).map((row) => (
-                <div key={row.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div
+                  key={row.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-white/30"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">{row.name}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{row.name}</p>
                     <p className="font-mono text-xs text-app-muted">
                       {row.batchNumber} &middot; {formatNumber(row.quantity)} units &middot;{' '}
                       {formatDate(row.expiryDate)}
@@ -334,7 +354,7 @@ export const AIInsights = () => {
                   <div className="shrink-0 text-right">
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                        'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold shadow-soft',
                         row.daysLeft <= 30 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800',
                       )}
                     >
@@ -353,7 +373,7 @@ export const AIInsights = () => {
       <Card>
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-800">Model metadata</p>
+            <p className="text-sm font-bold text-slate-800">Model metadata</p>
             <p className="mt-0.5 text-xs text-app-muted">
               Reported for transparency only. Values describe the demo heuristic, not a production model.
             </p>
@@ -365,9 +385,9 @@ export const AIInsights = () => {
               ['Sample size', data ? formatNumber(data.model.sampleSize) : '-'],
               ['Refreshed', data ? formatDate(data.model.trainedOn) : '-'],
             ].map(([label, value]) => (
-              <div key={label}>
-                <dt className="text-app-muted">{label}</dt>
-                <dd className="font-medium text-slate-800">{value}</dd>
+              <div key={label} className="neu-inset-sm rounded-xl px-3 py-1.5">
+                <dt className="text-[10px] font-bold tracking-[0.08em] text-app-muted uppercase">{label}</dt>
+                <dd className="font-bold text-slate-800">{value}</dd>
               </div>
             ))}
           </dl>

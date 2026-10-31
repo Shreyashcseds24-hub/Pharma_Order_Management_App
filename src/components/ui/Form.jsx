@@ -2,7 +2,10 @@ import { cn } from '../../utils/format'
 
 export const Field = ({ label, htmlFor, hint, error, required, children, className }) => (
   <div className={cn('space-y-1.5', className)}>
-    <label htmlFor={htmlFor} className="block text-xs font-medium text-slate-700">
+    <label
+      htmlFor={htmlFor}
+      className="block text-[11px] font-bold tracking-[0.08em] text-slate-600 uppercase"
+    >
       {label}
       {required ? (
         <span className="ml-0.5 text-red-600" aria-hidden="true">
@@ -12,7 +15,7 @@ export const Field = ({ label, htmlFor, hint, error, required, children, classNa
     </label>
     {children}
     {error ? (
-      <p className="text-xs font-medium text-red-600" role="alert">
+      <p className="text-xs font-semibold text-red-600" role="alert">
         {error}
       </p>
     ) : hint ? (
@@ -35,7 +38,7 @@ export const Input = ({ label, error, hint, required, id, className, icon: Icon,
       <div className="relative">
         {Icon ? (
           <Icon
-            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-400"
             aria-hidden="true"
           />
         ) : null}
@@ -43,7 +46,7 @@ export const Input = ({ label, error, hint, required, id, className, icon: Icon,
           id={inputId}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
-          className={cn('input-base', Icon && 'pl-9')}
+          className={cn('input-base', Icon && 'pl-10')}
           {...props}
         />
       </div>
@@ -87,11 +90,34 @@ export const Select = ({ label, error, hint, required, id, className, children, 
       <select
         id={inputId}
         aria-invalid={error ? 'true' : undefined}
-        className={cn('input-base cursor-pointer pr-8')}
+        className={cn('input-base cursor-pointer')}
         {...props}
       >
         {children}
       </select>
     </Field>
+  )
+}
+
+export const Toggle = ({ label, description, checked, onChange, disabled, id, className }) => {
+  const toggleId = id ?? `toggle-${label?.toString().toLowerCase().replace(/\s+/g, '-')}`
+  return (
+    <div className={cn('flex items-start justify-between gap-4', className)}>
+      <div className="min-w-0">
+        <label htmlFor={toggleId} className="block text-sm font-semibold text-slate-700">
+          {label}
+        </label>
+        {description ? <p className="mt-0.5 text-xs text-app-muted">{description}</p> : null}
+      </div>
+      <input
+        id={toggleId}
+        type="checkbox"
+        role="switch"
+        className="neu-toggle mt-0.5"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    </div>
   )
 }

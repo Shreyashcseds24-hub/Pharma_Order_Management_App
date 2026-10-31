@@ -98,8 +98,11 @@ export const Settings = () => {
       <Helmet title="Settings" description="Profile, notifications, permissions and API configuration." />
 
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Settings</h2>
-        <p className="text-sm text-app-muted">
+        <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+          Workspace
+        </p>
+        <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">Settings</h2>
+        <p className="mt-0.5 text-sm text-app-muted">
           Workspace preferences, your role permissions and backend configuration.
         </p>
       </div>
@@ -151,7 +154,7 @@ export const Settings = () => {
           <Card>
             <CardHeader title="Notifications and alerts" description="Choose which events raise a toast or alert" icon={Bell} />
             <CardBody className="space-y-4">
-              <div className="divide-y divide-app-border">
+              <div className="divide-y divide-app-border/50">
                 {[
                   { key: 'lowStockAlerts', label: 'Low-stock alerts', hint: 'Notify when a SKU falls to its reorder level' },
                   { key: 'expiryAlerts', label: 'Near-expiry alerts', hint: 'Notify when a batch enters the expiry window' },
@@ -160,17 +163,18 @@ export const Settings = () => {
                 ].map((item) => (
                   <label
                     key={item.key}
-                    className="flex cursor-pointer items-center justify-between gap-4 py-3"
+                    className="flex cursor-pointer items-center justify-between gap-4 py-3.5"
                   >
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium text-slate-800">{item.label}</span>
+                      <span className="block text-sm font-semibold text-slate-800">{item.label}</span>
                       <span className="block text-xs text-app-muted">{item.hint}</span>
                     </span>
                     <input
                       type="checkbox"
+                      role="switch"
                       checked={prefs[item.key]}
                       onChange={toggle(item.key)}
-                      className="h-4 w-4 shrink-0 accent-brand-600"
+                      className="neu-toggle"
                       aria-label={item.label}
                     />
                   </label>
@@ -246,8 +250,8 @@ export const Settings = () => {
           <Card>
             <CardHeader title="Your access" description="Effective permissions for the selected role" icon={ShieldCheck} />
             <CardBody>
-              <div className="flex items-center gap-3 rounded-lg border border-app-border bg-slate-50/60 p-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/40 bg-app-surface/60 p-3.5 shadow-inset-sm">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-400 to-brand-700 text-sm font-bold text-white shadow-raised">
                   {user?.initials}
                 </span>
                 <div className="min-w-0">
@@ -271,8 +275,8 @@ export const Settings = () => {
                       <span
                         className={
                           granted
-                            ? 'shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700'
-                            : 'shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500'
+                            ? 'shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200/60 ring-inset'
+                            : 'shrink-0 rounded-full bg-slate-100/80 px-2.5 py-0.5 font-semibold text-slate-500 ring-1 ring-slate-200/60 ring-inset'
                         }
                       >
                         {granted ? 'Allowed' : 'Not allowed'}
@@ -321,7 +325,7 @@ export const Settings = () => {
                   <dd className="text-slate-700">{refreshedOn}</dd>
                 </div>
               </dl>
-              <p className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600">
+              <p className="flex items-start gap-2 rounded-xl bg-app-surface/60 px-3 py-2.5 text-[11px] leading-relaxed text-slate-600 shadow-inset-sm">
                 <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
                 Set <span className="font-mono">VITE_USE_MOCK_API=false</span> in your .env file to route
                 every service call to the Flask API. No credentials are stored in this repository.

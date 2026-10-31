@@ -12,10 +12,17 @@ const ICONS = {
 }
 
 const TONES = {
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  error: 'border-red-200 bg-red-50 text-red-800',
-  warning: 'border-amber-200 bg-amber-50 text-amber-800',
-  info: 'border-brand-200 bg-brand-50 text-brand-800',
+  success: 'text-emerald-700',
+  error: 'text-red-700',
+  warning: 'text-amber-700',
+  info: 'text-brand-700',
+}
+
+const ICON_CHIP = {
+  success: 'bg-emerald-50 text-emerald-600',
+  error: 'bg-red-50 text-red-600',
+  warning: 'bg-amber-50 text-amber-600',
+  info: 'bg-brand-50 text-brand-600',
 }
 
 export const ToastProvider = ({ children }) => {
@@ -45,7 +52,7 @@ export const ToastProvider = ({ children }) => {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex flex-col items-center gap-2 p-4 sm:inset-x-auto sm:right-4 sm:bottom-4 sm:items-end"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] flex flex-col items-center gap-2.5 p-4 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:items-end"
       >
         {toasts.map((t) => {
           const Icon = ICONS[t.type] ?? Info
@@ -54,19 +61,28 @@ export const ToastProvider = ({ children }) => {
               key={t.id}
               role="status"
               className={cn(
-                'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border px-4 py-3 shadow-pop',
-                TONES[t.type] ?? TONES.info,
+                'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border border-white/60 bg-app-surface px-4 py-3.5',
+                'shadow-floating animate-[toast-in_220ms_cubic-bezier(0.4,0,0.2,1)]',
               )}
             >
-              <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span
+                className={cn(
+                  'rounded-xl p-1.5 shadow-soft',
+                  ICON_CHIP[t.type] ?? ICON_CHIP.info,
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              </span>
               <div className="min-w-0 flex-1">
-                {t.title ? <p className="text-sm font-semibold">{t.title}</p> : null}
-                <p className="text-sm leading-snug">{t.message}</p>
+                {t.title ? (
+                  <p className={cn('text-sm font-bold', TONES[t.type] ?? TONES.info)}>{t.title}</p>
+                ) : null}
+                <p className="text-sm leading-snug text-slate-700">{t.message}</p>
               </div>
               <button
                 type="button"
                 onClick={() => dismiss(t.id)}
-                className="rounded p-0.5 opacity-70 transition hover:opacity-100"
+                className="rounded-lg p-1 text-slate-400 transition hover:bg-white/50 hover:text-slate-700"
                 aria-label="Dismiss notification"
               >
                 <X className="h-4 w-4" aria-hidden="true" />

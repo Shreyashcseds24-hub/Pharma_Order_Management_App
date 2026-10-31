@@ -1,24 +1,24 @@
 export const AXIS_PROPS = {
-  stroke: '#94a3b8',
-  tick: { fill: '#64748b', fontSize: 11 },
+  stroke: '#bcc7d6',
+  tick: { fill: '#718096', fontSize: 11, fontWeight: 500 },
   tickLine: false,
 }
 
 export const GRID_PROPS = {
-  stroke: '#e3e8f0',
-  strokeDasharray: '3 3',
+  stroke: '#d3dae5',
+  strokeDasharray: '4 6',
   vertical: false,
 }
 
 export const SERIES_COLORS = {
-  brand: '#174ea6',
-  brandSoft: '#85acee',
-  accent: '#0d9488',
-  accentSoft: '#5fd7c4',
-  amber: '#d97706',
-  red: '#dc2626',
-  green: '#059669',
-  slate: '#94a3b8',
+  brand: '#6c63ff',
+  brandSoft: '#b7b1ff',
+  accent: '#3a8870',
+  accentSoft: '#8acdb7',
+  amber: '#b98a45',
+  red: '#c45f69',
+  green: '#4fa98c',
+  slate: '#9aa9bd',
 }
 
 export const currencyTooltip = {
@@ -34,11 +34,14 @@ export const compactCurrency = (value) => {
 
 export const tooltipStyle = {
   contentStyle: {
-    borderRadius: 10,
-    border: '1px solid #e3e8f0',
-    boxShadow: '0 8px 20px -8px rgba(15,23,42,0.18)',
+    borderRadius: 14,
+    border: '1px solid rgba(255,255,255,0.7)',
+    background: '#e8ecf2',
+    boxShadow:
+      '-6px -6px 14px rgba(255,255,255,0.8), 10px 10px 24px rgba(163,177,198,0.45)',
     fontSize: 12,
-    padding: '8px 10px',
+    padding: '10px 12px',
+    color: '#405b7a',
   },
-  labelStyle: { color: '#0f172a', fontWeight: 600, marginBottom: 4 },
+  labelStyle: { color: '#405b7a', fontWeight: 700, marginBottom: 4 },
 }

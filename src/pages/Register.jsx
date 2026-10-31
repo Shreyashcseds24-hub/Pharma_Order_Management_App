@@ -72,7 +72,12 @@ export const Register = () => {
   return (
     <div>
       <Helmet title="Register" description="Create a MediFlow AI demo account." />
-      <h1 className="text-2xl font-semibold text-slate-900">Create your account</h1>
+      <p className="text-[11px] font-extrabold tracking-[0.16em] text-brand-600 uppercase">
+        Get started
+      </p>
+      <h1 className="mt-1.5 text-[1.7rem] leading-tight font-extrabold tracking-tight text-slate-900">
+        Create your account
+      </h1>
       <p className="mt-1.5 text-sm text-app-muted">
         Set up a workspace profile for your distribution business.
       </p>
@@ -143,7 +148,7 @@ export const Register = () => {
         </div>
 
         {apiError ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          <p className="rounded-2xl border border-red-200/60 bg-red-50/80 px-3.5 py-2.5 text-sm font-medium text-red-700 shadow-soft" role="alert">
             {apiError}
           </p>
         ) : null}
