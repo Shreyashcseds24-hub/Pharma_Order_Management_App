@@ -9,6 +9,11 @@ import api, { USE_MOCK_API } from './api'
  */
 export const AI_CHAT_AVAILABLE = !USE_MOCK_API
 
+// A local/hosted model can spend minutes loading and generating an answer.
+// The shared Axios client uses a 15s timeout for ordinary CRUD calls, which
+// would abort a valid assistant response before the backend can finish.
+const AI_CHAT_TIMEOUT_MS = 330000
+
 export const getAIStatus = async () => {
   const { data } = await api.get('/ai/status')
   return data
@@ -17,7 +22,7 @@ export const getAIStatus = async () => {
 export const sendAIMessage = async ({ message, conversationId }) => {
   const payload = { message }
   if (conversationId) payload.conversation_id = conversationId
-  const { data } = await api.post('/ai/chat', payload)
+  const { data } = await api.post('/ai/chat', payload, { timeout: AI_CHAT_TIMEOUT_MS })
   return data
 }
 
