@@ -34,8 +34,11 @@ depend on a third-party component library for its visual identity.
   rule-based forecasting heuristic (not a trained ML model).
 - **AI operations assistant** — optional LLM-backed chat on the AI Insights page
   that answers inventory, order, sales and expiry questions through read-only,
-  role-scoped database tools. Medical questions are declined with a referral to a
-  healthcare professional. Disabled in demo mode; no answers are fabricated.
+  role-scoped database tools. Answers stream after tool execution; medical
+  questions are declined with a referral to a healthcare professional. Disabled
+  in mock mode; no answers are fabricated. See the
+  [AI demo runbook](docs/AI_DEMO_RUNBOOK.md) and
+  [model benchmark](docs/AI_MODEL_BENCHMARK.md).
 - **Retailer scoping** — retailers only see their own orders and related data.
 - **Two frontend data modes** — live Flask API or the original in-browser mock
   data layer.
@@ -223,7 +226,11 @@ secrets in a `VITE_*` variable.
 | `LLM_API_KEY` | OpenAI providers | — | Backend-only credential; never sent to the browser. |
 | `LLM_BASE_URL` | No | provider default | OpenAI-compatible endpoint or Ollama URL. |
 | `LLM_TIMEOUT` / `LLM_MAX_TOKENS` | No | `30` / `800` | Provider request timeout and completion limit. |
+| `LLM_NUM_CTX` | No | `8192` | Bounded Ollama context window; larger values use more RAM. |
 | `AI_MAX_MESSAGE_LENGTH` | No | `2000` | Maximum chat question length. |
+| `AI_MAX_HISTORY_MESSAGES` / `AI_MAX_HISTORY_MESSAGE_CHARS` | No | `6` / `2000` | Bounded conversation context. |
+| `AI_MAX_TOOL_RESULT_CHARS` | No | `4000` | Maximum verified tool payload sent to the model. |
+| `AI_ENABLE_STREAMING` / `AI_STREAM_MAX_CHUNKS` | No | `true` / `4000` | SSE answer streaming and stream chunk bound. |
 | `AI_RATE_LIMIT_REQUESTS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | No | `20` / `300` | Per-user chat rate limit. |
 
 Production startup rejects weak/placeholder JWT secrets, debug mode, non-PostgreSQL

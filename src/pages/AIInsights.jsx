@@ -23,6 +23,7 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
+  Square,
   Target,
   UserRound,
 } from 'lucide-react'
@@ -36,7 +37,12 @@ import { useToast } from '../components/ui/Toast'
 import { AXIS_PROPS, GRID_PROPS, SERIES_COLORS, compactCurrency, tooltipStyle } from '../components/charts/chartTheme'
 import { useAsync } from '../hooks/useAsync'
 import { getAIInsights } from '../services/analyticsService'
-import { AI_CHAT_AVAILABLE, getAIStatus, sendAIMessage } from '../services/aiService'
+import {
+  AI_CHAT_AVAILABLE,
+  getAIStatus,
+  sendAIMessage,
+  sendAIMessageStream,
+} from '../services/aiService'
 import { useAuth } from '../context/AuthContext'
 import { USE_MOCK_API } from '../services/api'
 import { cn, formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format'
@@ -140,11 +146,21 @@ const AssistantMessage = ({ message, isLast, sending, onFollowUp }) => {
         ) : null}
         {message.sources?.length ? (
           <div className="flex flex-wrap gap-1.5">
-            {message.sources.map((source) => (
-              <Badge key={source.tool} tone="brand" size="sm">
-                {source.label}
-              </Badge>
-            ))}
+            {message.sources.map((source) => {
+              const detail = [
+                source.detail,
+                source.asOf ? `As of ${source.asOf}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n')
+              return (
+                <span key={source.tool} title={detail || undefined}>
+                  <Badge tone="brand" size="sm">
+                    {source.label}
+                  </Badge>
+                </span>
+              )
+            })}
           </div>
         ) : null}
         {isLast && !sending && message.followUps?.length ? (
@@ -174,8 +190,12 @@ const AssistantPanel = () => {
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState(null)
   const [error, setError] = useState(null)
+  const [draft, setDraft] = useState('')
+  const [stage, setStage] = useState(null)
   const listRef = useRef(null)
   const inputRef = useRef(null)
+  const abortRef = useRef(null)
+  const stoppedRef = useRef(false)
 
   useEffect(() => {
     if (!AI_CHAT_AVAILABLE) return undefined
@@ -224,14 +244,47 @@ const AssistantPanel = () => {
       return
     }
 
+    const useStream = Boolean(status.data?.streaming)
+
     setInput('')
     setError(null)
+    setDraft('')
+    setStage(null)
+    stoppedRef.current = false
     setMessages((prev) => [...prev, { role: 'user', content: value }])
     setSending(true)
 
     try {
-      const data = await sendAIMessage({ message: value, conversationId })
+      let data
+      if (useStream) {
+        const controller = new AbortController()
+        abortRef.current = controller
+        setStage('Thinking…')
+        data = await sendAIMessageStream({
+          message: value,
+          conversationId,
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type === 'status') {
+              setDraft('')
+              setStage(
+                event.stage === 'reading'
+                  ? 'Reading your data…'
+                  : event.stage === 'writing'
+                    ? 'Writing the answer…'
+                    : 'Thinking…',
+              )
+            } else if (event.type === 'delta') {
+              setDraft((prev) => prev + event.text)
+            }
+          },
+        })
+      } else {
+        data = await sendAIMessage({ message: value, conversationId })
+      }
       if (data.conversation_id) setConversationId(data.conversation_id)
+      setDraft('')
+      setStage(null)
       setMessages((prev) => [
         ...prev,
         {
@@ -243,21 +296,47 @@ const AssistantPanel = () => {
         },
       ])
     } catch (err) {
-      const message = err?.message || 'The assistant could not answer. Please try again.'
-      setError(message)
-      setMessages((prev) => [...prev, { role: 'assistant', content: message, error: true }])
-      toast(message, { type: 'error', title: 'Assistant error' })
+      if (stoppedRef.current) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Answer stopped. The partial response was saved to this conversation.',
+          },
+        ])
+      } else {
+        const message = err?.message || 'The assistant could not answer. Please try again.'
+        setError(message)
+        setMessages((prev) => [...prev, { role: 'assistant', content: message, error: true }])
+        toast(message, { type: 'error', title: 'Assistant error' })
+      }
     } finally {
+      abortRef.current = null
+      setDraft('')
+      setStage(null)
       setSending(false)
       inputRef.current?.focus()
     }
   }
 
+  const stop = () => {
+    if (!sending || !abortRef.current) return
+    stoppedRef.current = true
+    abortRef.current.abort()
+  }
+
   const reset = () => {
+    if (abortRef.current) {
+      stoppedRef.current = true
+      abortRef.current.abort()
+      abortRef.current = null
+    }
     setMessages([])
     setConversationId(null)
     setError(null)
     setInput('')
+    setDraft('')
+    setStage(null)
     inputRef.current?.focus()
   }
 
@@ -360,11 +439,26 @@ const AssistantPanel = () => {
           ))}
 
           {sending ? (
-            <div className="flex items-center gap-2.5 text-xs text-app-muted">
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-app-surface text-brand-700 shadow-soft">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              </span>
-              Checking your data…
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5 text-xs text-app-muted">
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-app-surface text-brand-700 shadow-soft">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                </span>
+                {stage || 'Checking your data…'}
+              </div>
+              {draft ? (
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-app-surface text-brand-700 shadow-soft">
+                    <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <div className="max-w-[88%] rounded-2xl bg-white/70 px-3.5 py-2.5 text-sm leading-relaxed text-slate-600 ring-1 ring-inset ring-white/60">
+                    <p className="whitespace-pre-wrap break-words">
+                      {draft}
+                      <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse bg-brand-500 align-middle" aria-hidden="true" />
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -410,12 +504,17 @@ const AssistantPanel = () => {
             <p className="text-[11px] text-app-muted">
               Enter to send · Shift + Enter for a new line · No medical advice
             </p>
+            {sending && status.data?.streaming ? (
+              <Button type="button" size="sm" variant="ghost" icon={Square} onClick={stop}>
+                Stop
+              </Button>
+            ) : null}
             <Button
               type="submit"
               size="sm"
               icon={Send}
               loading={sending}
-              disabled={!ready || !input.trim()}
+              disabled={!ready || !input.trim() || sending}
             >
               Ask assistant
             </Button>

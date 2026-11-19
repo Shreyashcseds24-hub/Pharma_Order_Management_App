@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 from .errors import LLMResponseError
-from .provider import LLMProvider, LLMResponse, ToolCall
+from .provider import LLMProvider, LLMResponse, StreamChunk, ToolCall
 
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 
@@ -26,6 +26,8 @@ class OllamaProvider(LLMProvider):
         base_url: str = DEFAULT_OLLAMA_BASE_URL,
         timeout: int = 60,
         max_tokens: int = 800,
+        num_ctx: int = 8192,
+        stream_max_chunks: int = 4000,
     ):
         super().__init__(
             model=model,
@@ -33,6 +35,8 @@ class OllamaProvider(LLMProvider):
             base_url=base_url or DEFAULT_OLLAMA_BASE_URL,
             timeout=timeout,
             max_tokens=max_tokens,
+            num_ctx=num_ctx,
+            stream_max_chunks=stream_max_chunks,
         )
 
     def _convert_messages(self, messages):
@@ -91,6 +95,7 @@ class OllamaProvider(LLMProvider):
             "stream": False,
             "options": {
                 "num_predict": self.max_tokens,
+                "num_ctx": self.num_ctx,
                 "temperature": 0.2,
             },
         }
@@ -127,3 +132,103 @@ class OllamaProvider(LLMProvider):
             tool_calls=tool_calls,
             finish_reason=data.get("done_reason"),
         )
+
+    def stream(self, messages, tools=None):
+        """Stream NDJSON chunks from Ollama ``/api/chat``.
+
+        Tool calls are accumulated across chunks and returned only in the final
+        :class:`StreamChunk`; the assistant never executes a partial call.
+        """
+        payload = {
+            "model": self.model,
+            "messages": self._convert_messages(messages),
+            "stream": True,
+            "options": {
+                "num_predict": self.max_tokens,
+                "num_ctx": self.num_ctx,
+                "temperature": 0.2,
+            },
+        }
+        if tools:
+            payload["tools"] = tools
+
+        content_parts = []
+        calls = {}
+        with self._post_stream(f"{self.base_url}/api/chat", payload) as response:
+            for chunk_number, line in enumerate(response):
+                if chunk_number >= self.stream_max_chunks:
+                    raise LLMResponseError(
+                        "The AI provider returned too many stream chunks."
+                    )
+                text = (
+                    line.decode("utf-8", errors="replace")
+                    if isinstance(line, bytes)
+                    else str(line)
+                ).strip()
+                if not text:
+                    continue
+                try:
+                    data = json.loads(text)
+                except ValueError as error:
+                    raise LLMResponseError(
+                        "The AI provider returned an unreadable stream."
+                    ) from error
+                if not isinstance(data, dict):
+                    raise LLMResponseError("The AI provider returned an unexpected stream event.")
+                if data.get("error"):
+                    raise LLMResponseError("The Ollama provider returned an error.")
+
+                message = data.get("message") or {}
+                if not isinstance(message, dict):
+                    continue
+                delta = self._coerce_content(message.get("content"))
+                if delta:
+                    content_parts.append(delta)
+                    yield StreamChunk(delta=delta)
+
+                for position, raw in enumerate(message.get("tool_calls") or []):
+                    if not isinstance(raw, dict):
+                        continue
+                    function = raw.get("function") or {}
+                    index = int(raw.get("index") or position)
+                    entry = calls.setdefault(
+                        index,
+                        {"id": str(raw.get("id") or f"call_{index}"), "name": "", "arguments": {}},
+                    )
+                    if function.get("name"):
+                        entry["name"] = str(function["name"])
+                    arguments = function.get("arguments") or {}
+                    if isinstance(arguments, dict):
+                        entry["arguments"].update(arguments)
+                    elif isinstance(arguments, str) and arguments.strip():
+                        try:
+                            parsed = json.loads(arguments)
+                        except ValueError:
+                            parsed = {}
+                        if isinstance(parsed, dict):
+                            entry["arguments"].update(parsed)
+
+                if data.get("done"):
+                    tool_calls = []
+                    for index in sorted(calls):
+                        entry = calls[index]
+                        if not entry["name"]:
+                            continue
+                        tool_calls.append(
+                            ToolCall(
+                                id=entry["id"],
+                                name=entry["name"],
+                                arguments=self._parse_arguments(
+                                    json.dumps(entry["arguments"], ensure_ascii=False)
+                                ),
+                            )
+                        )
+                    yield StreamChunk(
+                        response=LLMResponse(
+                            content="".join(content_parts),
+                            tool_calls=tool_calls,
+                            finish_reason=data.get("done_reason"),
+                        )
+                    )
+                    return
+        raise LLMResponseError("The AI provider ended the stream before completion.")

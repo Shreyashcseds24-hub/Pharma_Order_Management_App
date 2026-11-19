@@ -1,5 +1,6 @@
 """LLM provider tests. No real provider is contacted."""
 
+import json
 import socket
 
 import pytest
@@ -235,5 +236,142 @@ def test_provider_status_never_exposes_the_api_key():
         "enabled": True,
         "provider": "openai",
         "model": "gpt-test",
+        "streaming": True,
     }
     assert "super-secret-key" not in repr(status)
+
+    disabled = provider_status(
+        {
+            "LLM_PROVIDER": "openai",
+            "LLM_MODEL": "gpt-test",
+            "LLM_BASE_URL": "https://provider.example/v1",
+            "LLM_API_KEY": "super-secret-key",
+            "AI_ENABLE_STREAMING": False,
+        }
+    )
+    assert disabled["streaming"] is False
+
+
+class FakeStream:
+    """Minimal context-managed iterable that mimics a streaming HTTP response."""
+
+    def __init__(self, lines):
+        self.lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def __iter__(self):
+        return iter(self.lines)
+
+
+def test_ollama_stream_accumulates_text_and_tool_calls():
+    provider = OllamaProvider(model="llama-test")
+    provider._post_stream = lambda *args, **kwargs: FakeStream(
+        [
+            json.dumps(
+                {
+                    "message": {
+                        "content": "Checking ",
+                        "tool_calls": [
+                            {
+                                "function": {
+                                    "name": "get_inventory_summary",
+                                    "arguments": {},
+                                }
+                            }
+                        ],
+                    },
+                    "done": False,
+                }
+            ).encode()
+            + b"\n",
+            json.dumps(
+                {"message": {"content": "inventory."}, "done": True, "done_reason": "stop"}
+            ).encode()
+            + b"\n",
+        ]
+    )
+
+    chunks = list(
+        provider.stream(
+            [{"role": "user", "content": "How is inventory?"}],
+            tools=[{"type": "function", "function": {"name": "get_inventory_summary"}}],
+        )
+    )
+    assert [chunk.delta for chunk in chunks if chunk.delta] == [
+        "Checking ",
+        "inventory.",
+    ]
+    final = chunks[-1].response
+    assert final.content == "Checking inventory."
+    assert final.tool_calls[0].name == "get_inventory_summary"
+    assert final.tool_calls[0].arguments == {}
+    assert final.finish_reason == "stop"
+
+
+def test_openai_stream_accumulates_fragmented_tool_arguments():
+    provider = OpenAIProvider(model="test-model", api_key="test-key")
+
+    def sse(payload):
+        return ("data: " + json.dumps(payload) + "\n\n").encode()
+
+    provider._post_stream = lambda *args, **kwargs: FakeStream(
+        [
+            sse({"choices": [{"delta": {"content": "Hello"}}]}),
+            sse(
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": "call-1",
+                                        "function": {
+                                            "name": "get_pending_orders",
+                                            "arguments": '{"limit":',
+                                        },
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ),
+            sse(
+                {
+                    "choices": [
+                        {
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "function": {"arguments": "5}"},
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ),
+            sse({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}),
+            b"data: [DONE]\n\n",
+        ]
+    )
+
+    chunks = list(
+        provider.stream(
+            [{"role": "user", "content": "pending?"}],
+            tools=[{"type": "function", "function": {"name": "get_pending_orders"}}],
+        )
+    )
+    assert [chunk.delta for chunk in chunks if chunk.delta] == ["Hello"]
+    final = chunks[-1].response
+    assert final.content == "Hello"
+    assert final.tool_calls[0].id == "call-1"
+    assert final.tool_calls[0].name == "get_pending_orders"
+    assert final.tool_calls[0].arguments == {"limit": 5}

@@ -94,10 +94,12 @@ All settings come from environment variables; see [`.env.example`](.env.example)
 | `LLM_API_KEY` | empty | Backend-only credential. Startup still succeeds without it; chat returns `503`. |
 | `LLM_BASE_URL` | provider default | OpenAI-compatible endpoint or Ollama URL. |
 | `LLM_TIMEOUT` / `LLM_MAX_TOKENS` | `30` / `800` | Provider request timeout and completion limit. |
+| `LLM_NUM_CTX` | `8192` | Bounded Ollama context window. |
 | `AI_MAX_MESSAGE_LENGTH` | `2000` | Maximum chat question length. |
-| `AI_MAX_HISTORY_MESSAGES` | `12` | Recent turns included as conversation context. |
-| `AI_MAX_TOOL_ITERATIONS` / `AI_MAX_TOOL_CALLS_PER_TURN` | `4` / `6` | Bounds on the tool-call loop. |
-| `AI_MAX_TOOL_RESULT_CHARS` / `AI_MAX_ANSWER_CHARS` | `12000` / `8000` | Prompt and answer size caps. |
+| `AI_MAX_HISTORY_MESSAGES` / `AI_MAX_HISTORY_MESSAGE_CHARS` | `6` / `2000` | Recent, clipped turns included as conversation context. |
+| `AI_MAX_TOOL_ITERATIONS` / `AI_MAX_TOOL_CALLS_PER_TURN` | `4` / `6` | Legacy iteration setting and hard call-count bound. |
+| `AI_MAX_TOOL_RESULT_CHARS` / `AI_MAX_ANSWER_CHARS` | `4000` / `8000` | Prompt and answer size caps. |
+| `AI_ENABLE_STREAMING` / `AI_STREAM_MAX_CHUNKS` | `true` / `4000` | SSE answer streaming and stream chunk bound. |
 | `AI_RATE_LIMIT_REQUESTS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | `20` / `300` | Per-user chat rate limit backed by persisted messages. |
 
 Production startup fails fast when the JWT/session secrets are weak or

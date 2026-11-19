@@ -17,6 +17,7 @@ from app.services.llm import (
     LLMResponse,
     LLMResponseError,
     LLMTimeoutError,
+    StreamChunk,
     ToolCall,
 )
 
@@ -162,9 +163,11 @@ def test_chat_executes_read_only_tools_and_reports_sources(
 
     assert body["answer"] == "Inventory is available."
     assert body["tool_calls"] == [{"name": "get_inventory_summary", "arguments": {}}]
-    assert body["sources"] == [
-        {"tool": "get_inventory_summary", "label": "Inventory summary"}
-    ]
+    assert len(body["sources"]) == 1
+    source = body["sources"][0]
+    assert source["tool"] == "get_inventory_summary"
+    assert source["label"] == "Inventory summary"
+    assert "3 active medicines" in source["detail"]
 
     # The second provider call must include the verified tool result.
     tool_messages = [
@@ -328,5 +331,172 @@ def test_status_endpoint_never_exposes_the_api_key(
     response = client.get("/api/ai/status", headers=admin_headers)
     assert response.status_code == 200
     body = response.get_json()
-    assert body == {"enabled": True, "provider": "openai", "model": "gpt-test"}
+    assert body == {
+        "enabled": True,
+        "provider": "openai",
+        "model": "gpt-test",
+        "streaming": True,
+    }
     assert "super-secret-key" not in response.get_data(as_text=True)
+
+
+def _sse_events(response):
+    """Parse a small SSE response into ``{'event', 'data'}`` dictionaries."""
+    events = []
+    current = {}
+    for line in response.get_data(as_text=True).splitlines():
+        if not line:
+            if current:
+                events.append(current)
+                current = {}
+            continue
+        if line.startswith("event:"):
+            current["event"] = line[6:].strip()
+        elif line.startswith("data:"):
+            current["data"] = json.loads(line[5:].strip())
+    if current:
+        events.append(current)
+    return events
+
+
+def test_stream_chat_emits_stages_and_persists_the_answer(
+    client, admin_headers, fake_provider
+):
+    fake_provider.responses = [
+        LLMResponse(
+            tool_calls=[ToolCall(id="call-1", name="get_inventory_summary", arguments={})]
+        ),
+        LLMResponse(content="Verified inventory answer."),
+    ]
+
+    response = client.post(
+        "/api/ai/chat/stream",
+        json={"message": "How is inventory?"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert response.mimetype == "text/event-stream"
+
+    events = _sse_events(response)
+    stages = [event["data"]["stage"] for event in events if event["data"].get("type") == "status"]
+    assert stages == ["thinking", "reading", "writing"]
+    deltas = [event["data"]["text"] for event in events if event["data"].get("type") == "delta"]
+    assert "".join(deltas) == "Verified inventory answer."
+
+    done = events[-1]["data"]
+    assert done["type"] == "done"
+    assert done["conversation_id"].startswith("AIC-")
+    assert done["sources"][0]["tool"] == "get_inventory_summary"
+    assert "3 active medicines" in done["sources"][0]["detail"]
+
+    conversation = client.get(
+        f"/api/ai/conversations/{done['conversation_id']}", headers=admin_headers
+    )
+    messages = conversation.get_json()["messages"]
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[1]["content"] == "Verified inventory answer."
+
+
+def test_stream_chat_requires_auth_and_rejects_invalid_fields(client, admin_headers):
+    assert client.post(
+        "/api/ai/chat/stream", json={"message": "Hello"}
+    ).status_code == 401
+    assert client.post(
+        "/api/ai/chat/stream", json={}, headers=admin_headers
+    ).status_code == 422
+    assert client.post(
+        "/api/ai/chat/stream",
+        json={"message": "Hello", "stream": True},
+        headers=admin_headers,
+    ).status_code == 422
+
+
+def test_stream_chat_enforces_conversation_ownership(
+    client, admin_headers, retailer_headers, fake_provider
+):
+    created = _chat(client, admin_headers, {"message": "Analyze my inventory."})
+    conversation_id = created.get_json()["conversation_id"]
+
+    response = client.post(
+        "/api/ai/chat/stream",
+        json={"message": "Continue.", "conversation_id": conversation_id},
+        headers=retailer_headers,
+    )
+    assert response.status_code == 404
+
+
+def test_stream_provider_error_is_safe_and_does_not_persist_an_answer(
+    client, admin_headers, fake_provider, monkeypatch
+):
+    monkeypatch.setitem(client.application.config, "LLM_API_KEY", "super-secret-key")
+    fake_provider.responses = [LLMConfigurationError("upstream body with super-secret-key")]
+
+    response = client.post(
+        "/api/ai/chat/stream",
+        json={"message": "Analyze my inventory."},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    events = _sse_events(response)
+    assert events[-1]["event"] == "error"
+    assert events[-1]["data"]["message"]
+    text = response.get_data(as_text=True)
+    assert "super-secret-key" not in text
+    assert "Traceback" not in text
+
+    assert not any(event["data"].get("type") == "done" for event in events)
+    conversation = client.get("/api/ai/conversations", headers=admin_headers)
+    conversation_id = conversation.get_json()["conversations"][0]["conversation_id"]
+    messages = client.get(
+        f"/api/ai/conversations/{conversation_id}", headers=admin_headers
+    ).get_json()["messages"]
+    assert [message["role"] for message in messages] == ["user"]
+
+
+def test_stream_interruption_persists_partial_answer_without_internal_details(
+    client, admin_headers, app, monkeypatch
+):
+    class InterruptingProvider:
+        name = "interrupting"
+
+        def complete(self, messages, tools=None):
+            if tools:
+                return LLMResponse(
+                    tool_calls=[
+                        ToolCall(
+                            id="call-1",
+                            name="get_inventory_summary",
+                            arguments={},
+                        )
+                    ]
+                )
+            return LLMResponse(content="unused")
+
+        def stream(self, messages, tools=None):
+            yield StreamChunk(delta="Partial verified answer. ")
+            raise RuntimeError("internal failure 12345")
+
+    monkeypatch.setitem(app.extensions, "llm_provider", InterruptingProvider())
+
+    response = client.post(
+        "/api/ai/chat/stream",
+        json={"message": "How is inventory?"},
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    events = _sse_events(response)
+    assert events[-1]["event"] == "error"
+    assert events[-1]["data"]["message"] == "The AI assistant is currently unavailable."
+    text = response.get_data(as_text=True)
+    assert "internal failure 12345" not in text
+    assert "Traceback" not in text
+
+    conversation = client.get("/api/ai/conversations", headers=admin_headers)
+    conversation_id = conversation.get_json()["conversations"][0]["conversation_id"]
+    messages = client.get(
+        f"/api/ai/conversations/{conversation_id}", headers=admin_headers
+    ).get_json()["messages"]
+    assistant = messages[-1]
+    assert assistant["role"] == "assistant"
+    assert "Partial verified answer." in assistant["content"]
+    assert "[Response interrupted.]" in assistant["content"]

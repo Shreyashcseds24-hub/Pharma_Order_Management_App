@@ -146,15 +146,25 @@ class Config:
     ).rstrip("/")
     LLM_TIMEOUT = _int_env("LLM_TIMEOUT", 30)
     LLM_MAX_TOKENS = _int_env("LLM_MAX_TOKENS", 800)
+    # A bounded context avoids allocating a huge KV cache for a CPU-only
+    # Ollama model. It is deliberately configurable for larger hosted models.
+    LLM_NUM_CTX = _int_env("LLM_NUM_CTX", 8192)
 
     AI_MAX_MESSAGE_LENGTH = _int_env("AI_MAX_MESSAGE_LENGTH", 2000)
-    AI_MAX_HISTORY_MESSAGES = _int_env("AI_MAX_HISTORY_MESSAGES", 12)
+    # Prompt evaluation dominates CPU latency: keep only recent turns, clipped,
+    # and send compact tool payloads to the model.
+    AI_MAX_HISTORY_MESSAGES = _int_env("AI_MAX_HISTORY_MESSAGES", 6)
+    AI_MAX_HISTORY_MESSAGE_CHARS = _int_env("AI_MAX_HISTORY_MESSAGE_CHARS", 2000)
     AI_MAX_TOOL_ITERATIONS = _int_env("AI_MAX_TOOL_ITERATIONS", 4)
     AI_MAX_TOOL_CALLS_PER_TURN = _int_env("AI_MAX_TOOL_CALLS_PER_TURN", 6)
-    AI_MAX_TOOL_RESULT_CHARS = _int_env("AI_MAX_TOOL_RESULT_CHARS", 12000)
+    AI_MAX_TOOL_RESULT_CHARS = _int_env("AI_MAX_TOOL_RESULT_CHARS", 4000)
     AI_MAX_ANSWER_CHARS = _int_env("AI_MAX_ANSWER_CHARS", 8000)
     AI_RATE_LIMIT_REQUESTS = _int_env("AI_RATE_LIMIT_REQUESTS", 20)
     AI_RATE_LIMIT_WINDOW_SECONDS = _int_env("AI_RATE_LIMIT_WINDOW_SECONDS", 300)
+
+    # Optional NDJSON/SSE streaming. The non-streaming endpoint remains intact.
+    AI_ENABLE_STREAMING = _bool_env("AI_ENABLE_STREAMING", True)
+    AI_STREAM_MAX_CHUNKS = _int_env("AI_STREAM_MAX_CHUNKS", 4000)
 
     DEBUG = _bool_env("FLASK_DEBUG", not _IS_PRODUCTION)
 
@@ -260,12 +270,15 @@ def validate_config(app):
     for key, minimum, maximum in (
         ("LLM_TIMEOUT", 1, 300),
         ("LLM_MAX_TOKENS", 1, 32000),
+        ("LLM_NUM_CTX", 512, 131072),
         ("AI_MAX_MESSAGE_LENGTH", 1, 20000),
         ("AI_MAX_HISTORY_MESSAGES", 1, 100),
+        ("AI_MAX_HISTORY_MESSAGE_CHARS", 100, 20000),
         ("AI_MAX_TOOL_ITERATIONS", 1, 10),
         ("AI_MAX_TOOL_CALLS_PER_TURN", 1, 20),
         ("AI_MAX_TOOL_RESULT_CHARS", 100, 100000),
         ("AI_MAX_ANSWER_CHARS", 100, 50000),
+        ("AI_STREAM_MAX_CHUNKS", 100, 100000),
         ("AI_RATE_LIMIT_REQUESTS", 0, 1000),
         ("AI_RATE_LIMIT_WINDOW_SECONDS", 1, 86400),
     ):

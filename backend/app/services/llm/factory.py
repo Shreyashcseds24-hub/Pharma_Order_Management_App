@@ -38,6 +38,8 @@ def create_provider(config=None):
     base_url = str(settings.get("LLM_BASE_URL") or "").strip()
     timeout = settings.get("LLM_TIMEOUT", 30)
     max_tokens = settings.get("LLM_MAX_TOKENS", 800)
+    num_ctx = settings.get("LLM_NUM_CTX", 8192)
+    stream_max_chunks = settings.get("AI_STREAM_MAX_CHUNKS", 4000)
 
     if provider == "ollama":
         return OllamaProvider(
@@ -46,6 +48,8 @@ def create_provider(config=None):
             base_url=base_url or DEFAULT_OLLAMA_BASE_URL,
             timeout=timeout,
             max_tokens=max_tokens,
+            num_ctx=num_ctx,
+            stream_max_chunks=stream_max_chunks,
         )
 
     if provider in ("openai", "openai-compatible"):
@@ -55,6 +59,8 @@ def create_provider(config=None):
             base_url=base_url or DEFAULT_OPENAI_BASE_URL,
             timeout=timeout,
             max_tokens=max_tokens,
+            num_ctx=num_ctx,
+            stream_max_chunks=stream_max_chunks,
         )
 
     raise LLMConfigurationError(

@@ -10,7 +10,7 @@ from .errors import (
     LLMTimeoutError,
 )
 from .factory import SUPPORTED_PROVIDERS, create_provider
-from .provider import LLMProvider, LLMResponse, ToolCall, provider_status
+from .provider import LLMProvider, LLMResponse, StreamChunk, ToolCall, provider_status
 
 __all__ = [
     "LLMError",
@@ -22,6 +22,7 @@ __all__ = [
     "LLMResponseError",
     "LLMProvider",
     "LLMResponse",
+    "StreamChunk",
     "ToolCall",
     "SUPPORTED_PROVIDERS",
     "create_provider",

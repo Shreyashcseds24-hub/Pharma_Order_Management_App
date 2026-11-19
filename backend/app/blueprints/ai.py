@@ -13,18 +13,20 @@ Security invariants:
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import timedelta
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
+from flask_jwt_extended import get_jwt_identity
 from sqlalchemy import func
 
 from ..errors import ApiError
 from ..extensions import db
 from ..logging_config import log_event
-from ..models import AIConversation, AIMessage, utcnow
+from ..models import AIConversation, AIMessage, User, utcnow
 from ..permissions import load_current_user, require_permission
-from ..services.ai_assistant import run_chat
+from ..services.ai_assistant import run_chat, stream_chat
 from ..services.llm import (
     LLMAuthError,
     LLMConfigurationError,
@@ -236,6 +238,128 @@ def chat():
             "follow_ups": result["follow_ups"],
             "limited": result.get("limited", False),
         }
+    )
+
+
+@ai_bp.post("/chat/stream")
+@require_permission("reports:view")
+def chat_stream():
+    """Server-Sent Events variant of ``/chat``.
+
+    Authentication, rate limiting, conversation ownership, tool execution and
+    persistence use exactly the same helpers as the non-streaming endpoint.
+    Only the final assistant text is streamed; tool calls are accumulated by
+    the provider and executed before any answer text is released.
+    """
+    user = load_current_user()
+    message_text, conversation_id = _validate_chat_request()
+    _enforce_rate_limit(user)
+
+    conversation = _owned_conversation(user, conversation_id)
+    if conversation is None:
+        conversation = _create_conversation(user, message_text)
+    _add_message(conversation, "user", message_text)
+    db.session.commit()
+
+    conversation_id = conversation.id
+    parts = []
+    completed = False
+
+    def generate():
+        nonlocal completed
+        # The response streams after the request handler returns, so the ORM
+        # objects captured above may be detached. Reload them inside the
+        # stream's app context before any lazy load, tool call or commit.
+        active_user = db.session.get(User, get_jwt_identity())
+        active_conversation = AIConversation.query.filter_by(
+            id=conversation_id, user_id=active_user.id
+        ).first()
+        events = stream_chat(
+            active_user, message_text, active_conversation, current_app.config
+        )
+        try:
+            for kind, payload in events:
+                if kind == "status":
+                    yield f"data: {json.dumps({'type': 'status', 'stage': payload})}\n\n"
+                elif kind == "delta":
+                    parts.append(payload)
+                    yield f"data: {json.dumps({'type': 'delta', 'text': payload})}\n\n"
+                elif kind == "done":
+                    _add_message(active_conversation, "assistant", payload["answer"])
+                    active_conversation.last_message_at = utcnow()
+                    db.session.commit()
+                    completed = True
+                    log_event(
+                        current_app.logger,
+                        "ai.chat.stream",
+                        conversation_id=active_conversation.id,
+                        user_id=active_user.id,
+                        role=active_user.role.name,
+                        tool_count=len(payload["tool_calls"]),
+                        tools=[call["name"] for call in payload["tool_calls"]],
+                        limited=payload.get("limited", False),
+                    )
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "type": "done",
+                                "conversation_id": active_conversation.id,
+                                "answer": payload["answer"],
+                                "sources": payload["sources"],
+                                "tool_calls": payload["tool_calls"],
+                                "follow_ups": payload["follow_ups"],
+                                "limited": payload.get("limited", False),
+                            }
+                        )
+                        + "\n\n"
+                    )
+        except LLMError as error:
+            log_event(
+                current_app.logger,
+                "ai.provider_error",
+                level=logging.WARNING,
+                conversation_id=conversation_id,
+                error_type=type(error).__name__,
+            )
+            yield (
+                "event: error\ndata: "
+                + json.dumps({"message": _safe_provider_error(error).message})
+                + "\n\n"
+            )
+        except Exception:  # noqa: BLE001 - never leak an internal error to the browser
+            log_event(
+                current_app.logger,
+                "ai.stream_error",
+                level=logging.ERROR,
+                conversation_id=conversation_id,
+            )
+            yield (
+                "event: error\ndata: "
+                + json.dumps({"message": "The AI assistant is currently unavailable."})
+                + "\n\n"
+            )
+        finally:
+            # A closed browser connection stops the generator. Keep whatever
+            # text was already produced so the transcript is not silently lost.
+            if not completed and parts:
+                try:
+                    _add_message(
+                        active_conversation,
+                        "assistant",
+                        "".join(parts) + "\n\n[Response interrupted.]",
+                    )
+                    active_conversation.last_message_at = utcnow()
+                    db.session.commit()
+                except Exception:  # noqa: BLE001 - the client is already gone
+                    db.session.rollback()
+
+
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers=headers,
     )
 
 

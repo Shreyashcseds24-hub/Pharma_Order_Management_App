@@ -552,7 +552,9 @@ All assistant endpoints require a bearer token and the `reports:view` permission
 authenticated user.
 
 The assistant is optional. If no LLM provider is configured the rest of the API
-still starts normally; `POST /ai/chat` returns a safe `503`.
+still starts normally; `POST /ai/chat` returns a safe `503`. Streaming is enabled
+with `AI_ENABLE_STREAMING=true` (the default); the non-streaming endpoint remains
+available as a fallback.
 
 ### `POST /ai/chat`
 
@@ -574,7 +576,11 @@ Response:
   "conversation_id": "AIC-1001",
   "answer": "Amoxicillin 500 mg is below its reorder level...",
   "sources": [
-    { "tool": "get_low_stock_medicines", "label": "Low-stock medicines" }
+    {
+      "tool": "get_low_stock_medicines",
+      "label": "Low-stock medicines",
+      "detail": "3 rows returned"
+    }
   ],
   "tool_calls": [
     { "name": "get_low_stock_medicines", "arguments": { "limit": 10 } }
@@ -585,7 +591,9 @@ Response:
 ```
 
 - `answer` is plain text. The frontend renders it as text, never HTML.
-- `sources` lists the read-only tools that produced the answer.
+- `sources` lists the read-only tools that produced the answer. `detail` is a
+  short count derived from the same verified tool result; `asOf` is included when
+  the tool reports its own data date.
 - `limited` is `true` for medical questions. In that case the assistant does not
   call the provider or any tool and refers the user to a healthcare professional.
 - The user turn and assistant answer are persisted for the owner. Tool payloads
@@ -605,12 +613,50 @@ Errors:
 | `503` | Assistant not configured or provider unavailable. |
 | `504` | Provider timed out. |
 
+### `POST /ai/chat/stream`
+
+Same JSON body, validation, authentication, rate limit and conversation ownership
+rules as `POST /ai/chat`. On success the response is `text/event-stream`:
+
+```text
+data: {"type":"status","stage":"thinking"}
+
+data: {"type":"status","stage":"reading"}
+
+data: {"type":"status","stage":"writing"}
+
+data: {"type":"delta","text":"Inventory summary: "}
+
+data: {"type":"done","conversation_id":"AIC-1001","answer":"...","sources":[],"tool_calls":[],"follow_ups":[],"limited":false}
+```
+
+- `status` stages are `thinking` (selecting tools), `reading` (executing bounded
+  read-only tools) and `writing` (streaming the verified answer).
+- Tool selection is internal and non-streaming. Tools are accumulated and
+  executed before the first `delta`; the final answer call has no tools, so the
+  model cannot stream unverified business facts.
+- `done` has the same fields as the non-streaming response and is emitted only
+  after the assistant message has been committed.
+- Provider failures emit `event: error` with a single safe `message`. Internal
+  exception text, provider response bodies, prompts and credentials are never
+  included. The HTTP status is already committed at that point.
+- If the client closes the connection, any streamed text is persisted with
+  `[Response interrupted.]` appended. The frontend also applies its existing
+  330-second ceiling and can cancel the request.
+- Validation, authentication, ownership and rate-limit failures occur before the
+  stream starts and use the same JSON statuses listed above.
+
 ### `GET /ai/status`
 
 Returns non-sensitive provider metadata. The API key is never included.
 
 ```json
-{ "enabled": true, "provider": "openai", "model": "gpt-4o-mini" }
+{
+  "enabled": true,
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "streaming": true
+}
 ```
 
 ### `GET /ai/conversations`

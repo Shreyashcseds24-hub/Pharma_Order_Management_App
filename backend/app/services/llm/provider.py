@@ -47,6 +47,18 @@ class LLMResponse:
     usage: dict | None = None
 
 
+@dataclass
+class StreamChunk:
+    """One incremental stream event.
+
+    ``delta`` carries assistant text; the final chunk carries the fully
+    accumulated ``response`` so callers can persist and report it once.
+    """
+
+    delta: str = ""
+    response: LLMResponse | None = None
+
+
 class LLMProvider:
     """Base class for chat-completions providers."""
 
@@ -60,6 +72,8 @@ class LLMProvider:
         base_url: str = "",
         timeout: int = 30,
         max_tokens: int = 800,
+        num_ctx: int = 8192,
+        stream_max_chunks: int = 4000,
     ):
         if not model:
             raise LLMConfigurationError("LLM_MODEL must be configured.")
@@ -75,9 +89,24 @@ class LLMProvider:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_tokens = max_tokens
+        self.num_ctx = num_ctx
+        self.stream_max_chunks = stream_max_chunks
 
     def complete(self, messages, tools=None) -> LLMResponse:
         raise NotImplementedError
+
+    def stream(self, messages, tools=None):
+        """Yield :class:`StreamChunk` events.
+
+        Providers without native streaming inherit this adapter, which emits
+        the complete answer as one delta. The assistant treats both paths
+        identically, so authentication, tool execution and persistence stay
+        unchanged.
+        """
+        response = self.complete(messages, tools=tools)
+        if response.content:
+            yield StreamChunk(delta=response.content)
+        yield StreamChunk(response=response)
 
     # ------------------------------------------------------------------
     # Shared HTTP transport
@@ -118,6 +147,38 @@ class LLMProvider:
         if not isinstance(data, dict):
             raise LLMResponseError("The AI provider returned an unexpected response.")
         return data
+
+    def _post_stream(self, url, payload, headers=None, accept="application/x-ndjson"):
+        """Open a streaming HTTP response.
+
+        The caller owns the returned response and must close it. Errors are
+        normalised to the same typed exceptions as non-streaming requests, and
+        no response body is ever included in an exception message.
+        """
+        body = json.dumps(payload).encode("utf-8")
+        request_headers = {
+            "Content-Type": "application/json",
+            "Accept": accept,
+            "User-Agent": "MediFlow-AI/1.0",
+        }
+        if headers:
+            request_headers.update(headers)
+
+        request = urllib.request.Request(
+            url, data=body, headers=request_headers, method="POST"
+        )
+        try:
+            return urllib.request.urlopen(request, timeout=self.timeout)
+        except urllib.error.HTTPError as error:
+            self._raise_for_http(error.code)
+        except (socket.timeout, TimeoutError) as error:
+            raise LLMTimeoutError("The AI provider timed out.") from error
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, (socket.timeout, TimeoutError)):
+                raise LLMTimeoutError("The AI provider timed out.") from error
+            raise LLMConnectionError("The AI provider could not be reached.") from error
+        except OSError as error:
+            raise LLMConnectionError("The AI provider could not be reached.") from error
 
     def _raise_for_http(self, status):
         if status in (401, 403):
@@ -175,6 +236,7 @@ def provider_status(config):
         "enabled": configured,
         "provider": provider,
         "model": model,
+        "streaming": bool(config.get("AI_ENABLE_STREAMING", True)),
     }
 
 
@@ -182,6 +244,7 @@ __all__ = [
     "LLMError",
     "LLMProvider",
     "LLMResponse",
+    "StreamChunk",
     "ToolCall",
     "provider_status",
 ]
