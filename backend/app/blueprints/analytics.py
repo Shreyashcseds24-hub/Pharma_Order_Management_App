@@ -6,15 +6,7 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy import func
 
 from ..extensions import db
-from ..models import (
-    ActivityLog,
-    Batch,
-    Medicine,
-    Notification,
-    Order,
-    OrderItem,
-    StockMovement,
-)
+from ..models import ActivityLog, Medicine, Notification, Order, OrderItem, StockMovement
 from ..permissions import load_current_user, require_permission
 from ..serializers import (
     activity_to_dict,
@@ -22,214 +14,21 @@ from ..serializers import (
     notification_to_dict,
     order_to_dict,
 )
+from ..services.analytics_data import (
+    REPORT_STATUSES,
+    SALES_STATUSES,
+    avg_daily_units as _avg_daily_units,
+    daily_series as _daily_series,
+    expiry_risk as _expiry_risk,
+    lower_stock_medicines as _lower_stock_medicines,
+    order_query as _order_query,
+    recommendations as _recommendations,
+    stockout_risk as _stockout_risk,
+    units_last_days as _units_last_days,
+)
 from ..utils import day_bounds, json_date
 
 analytics_bp = Blueprint("analytics", __name__, url_prefix="/analytics")
-
-REPORT_STATUSES = ("Pending", "Approved", "Processing", "Shipped", "Delivered", "Cancelled")
-SALES_STATUSES = ("Pending", "Approved", "Processing", "Shipped", "Delivered")
-
-
-def _order_query(user=None):
-    query = Order.query
-    if user is not None and user.role.name == "retailer":
-        query = query.filter(Order.retailer_id == user.retailer_id)
-    return query
-
-
-def _daily_series(user, days):
-    start = date.today() - timedelta(days=days - 1)
-    orders = (
-        _order_query(user)
-        .filter(Order.order_date >= start, Order.status.in_(SALES_STATUSES))
-        .all()
-    )
-    by_date = {}
-    for order in orders:
-        bucket = by_date.setdefault(
-            order.order_date, {"date": json_date(order.order_date), "revenue": 0.0, "orders": 0, "units": 0}
-        )
-        bucket["revenue"] += float(order.total_amount)
-        bucket["orders"] += 1
-        bucket["units"] += sum(item.quantity for item in order.items)
-
-    series = []
-    for day in day_bounds(days):
-        key = json_date(day)
-        row = by_date.get(day)
-        if row:
-            series.append(
-                {
-                    "date": key,
-                    "revenue": round(row["revenue"], 2),
-                    "orders": row["orders"],
-                    "units": row["units"],
-                }
-            )
-        else:
-            series.append({"date": key, "revenue": 0.0, "orders": 0, "units": 0})
-    return series
-
-
-def _total_available(medicine):
-    return sum(
-        batch.inventory.quantity
-        for batch in medicine.batches
-        if batch.inventory is not None and batch.expiry_date >= date.today()
-    )
-
-
-def _avg_daily_units(user=None, days=30):
-    start = date.today() - timedelta(days=days - 1)
-    query = (
-        db.session.query(OrderItem.medicine_id, func.sum(OrderItem.quantity))
-        .join(Order, OrderItem.order_id == Order.id)
-        .filter(
-            Order.order_date >= start,
-            Order.status.in_(SALES_STATUSES),
-            OrderItem.medicine_id.isnot(None),
-        )
-    )
-    if user is not None and user.role.name == "retailer":
-        query = query.filter(Order.retailer_id == user.retailer_id)
-    rows = query.group_by(OrderItem.medicine_id).all()
-    return {medicine_id: (int(units or 0) / days) for medicine_id, units in rows}
-
-
-def _units_last_days(user, days):
-    start = date.today() - timedelta(days=days - 1)
-    query = (
-        db.session.query(OrderItem.medicine_id, func.sum(OrderItem.quantity))
-        .join(Order, OrderItem.order_id == Order.id)
-        .filter(
-            Order.order_date >= start,
-            Order.status.in_(SALES_STATUSES),
-            OrderItem.medicine_id.isnot(None),
-        )
-    )
-    if user is not None and user.role.name == "retailer":
-        query = query.filter(Order.retailer_id == user.retailer_id)
-    rows = query.group_by(OrderItem.medicine_id).all()
-    return {medicine_id: int(units or 0) for medicine_id, units in rows}
-
-
-def _lower_stock_medicines():
-    medicines = Medicine.query.filter(Medicine.is_active.is_(True)).all()
-    rows = []
-    for medicine in medicines:
-        available = _total_available(medicine)
-        if available <= medicine.reorder_level:
-            rows.append((medicine, available))
-    rows.sort(key=lambda pair: (pair[1] / max(pair[0].reorder_level, 1), pair[1]))
-    return rows
-
-
-def _recommendations(user, horizon):
-    averages = _avg_daily_units(user)
-    medicines = Medicine.query.filter(Medicine.is_active.is_(True)).all()
-    scored = []
-    for medicine in medicines:
-        available = _total_available(medicine)
-        daily = averages.get(medicine.id, 0.0)
-        target = max(medicine.reorder_level, ceil(daily * horizon))
-        suggested = max(0, ceil(target - available))
-        days_cover = (available / daily) if daily > 0 else (999 if available > 0 else 0)
-        if suggested <= 0 and days_cover > horizon:
-            continue
-        if available <= medicine.reorder_level * 0.5 or days_cover <= 7:
-            urgency = "critical"
-        elif available <= medicine.reorder_level or days_cover <= 14:
-            urgency = "high"
-        elif days_cover <= horizon:
-            urgency = "medium"
-        else:
-            urgency = "low"
-        confidence = min(92, max(58, 60 + int(min(daily, 40) * 0.8)))
-        if daily > 0:
-            reason = (
-                f"Average issues are {daily:.1f} units/day. Current usable stock covers "
-                f"{days_cover:.0f} days against a {horizon}-day planning horizon; "
-                f"{suggested} units would restore cover above the reorder level."
-            )
-        else:
-            reason = (
-                f"Stock is at or below the reorder level ({medicine.reorder_level} units) "
-                f"and no recent issues were recorded. {suggested} units are suggested to restore buffer."
-            )
-        scored.append(
-            {
-                "id": f"REC-{medicine.id}",
-                "medicineId": medicine.id,
-                "title": f"{medicine.name} {medicine.strength}",
-                "suggestedQuantity": suggested,
-                "currentStock": available,
-                "reorderLevel": medicine.reorder_level,
-                "urgency": urgency,
-                "confidence": confidence,
-                "reason": reason,
-                "_daysCover": days_cover,
-            }
-        )
-    scored.sort(key=lambda row: (row["_daysCover"], -row["suggestedQuantity"]))
-    return scored
-
-
-def _stockout_risk(user):
-    averages = _avg_daily_units(user)
-    medicines = Medicine.query.filter(Medicine.is_active.is_(True)).all()
-    rows = []
-    for medicine in medicines:
-        daily = averages.get(medicine.id, 0.0)
-        if daily <= 0:
-            continue
-        available = _total_available(medicine)
-        days = int(available / daily)
-        if days <= 7:
-            risk = "critical"
-        elif days <= 14:
-            risk = "high"
-        elif days <= 30:
-            risk = "medium"
-        else:
-            risk = "low"
-        if risk == "low":
-            continue
-        rows.append(
-            {
-                "medicineId": medicine.id,
-                "name": f"{medicine.name} {medicine.strength}",
-                "daysToStockout": days,
-                "risk": risk,
-            }
-        )
-    rows.sort(key=lambda row: row["daysToStockout"])
-    return rows
-
-
-def _expiry_risk(days=90):
-    horizon = date.today() + timedelta(days=days)
-    rows = []
-    for batch in Batch.query.filter(Batch.expiry_date <= horizon).all():
-        medicine = batch.medicine
-        if medicine is None or not medicine.is_active:
-            continue
-        quantity = batch.inventory.quantity if batch.inventory else 0
-        if quantity <= 0:
-            continue
-        rows.append(
-            {
-                "id": batch.id,
-                "medicineId": medicine.id,
-                "name": f"{medicine.name} {medicine.strength}",
-                "batchNumber": batch.batch_number,
-                "quantity": quantity,
-                "expiryDate": json_date(batch.expiry_date),
-                "daysLeft": (batch.expiry_date - date.today()).days,
-                "valueAtRisk": round(quantity * float(batch.cost_price), 2),
-            }
-        )
-    rows.sort(key=lambda row: row["daysLeft"])
-    return rows
 
 
 @analytics_bp.get("/dashboard")

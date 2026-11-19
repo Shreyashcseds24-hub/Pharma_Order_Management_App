@@ -89,6 +89,16 @@ All settings come from environment variables; see [`.env.example`](.env.example)
 | `REGISTRATION_ALLOWED_ROLES` | `retailer` in production | Roles a visitor can self-register. Privileged self-registration is rejected in production. |
 | `LOG_LEVEL` / `LOG_FORMAT` | `INFO` / `text` (`json` in production) | Structured logging controls. |
 | `RUN_MIGRATIONS` | `true` in Docker | Run Alembic before Gunicorn in the container entrypoint. |
+| `LLM_PROVIDER` | `openai` | `openai`, `openai-compatible` or `ollama`. |
+| `LLM_MODEL` | `gpt-4o-mini` | Provider model name. |
+| `LLM_API_KEY` | empty | Backend-only credential. Startup still succeeds without it; chat returns `503`. |
+| `LLM_BASE_URL` | provider default | OpenAI-compatible endpoint or Ollama URL. |
+| `LLM_TIMEOUT` / `LLM_MAX_TOKENS` | `30` / `800` | Provider request timeout and completion limit. |
+| `AI_MAX_MESSAGE_LENGTH` | `2000` | Maximum chat question length. |
+| `AI_MAX_HISTORY_MESSAGES` | `12` | Recent turns included as conversation context. |
+| `AI_MAX_TOOL_ITERATIONS` / `AI_MAX_TOOL_CALLS_PER_TURN` | `4` / `6` | Bounds on the tool-call loop. |
+| `AI_MAX_TOOL_RESULT_CHARS` / `AI_MAX_ANSWER_CHARS` | `12000` / `8000` | Prompt and answer size caps. |
+| `AI_RATE_LIMIT_REQUESTS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | `20` / `300` | Per-user chat rate limit backed by persisted messages. |
 
 Production startup fails fast when the JWT/session secrets are weak or
 placeholders, `DATABASE_URL` is not PostgreSQL, debug is enabled, CORS contains
@@ -172,6 +182,58 @@ Pending -> Approved -> Processing -> Shipped -> Delivered
 - Historical seed orders have no allocations, so cancelling them does not invent
   stock.
 
+## AI assistant
+
+The optional assistant is exposed under `/api/ai` and requires a JWT plus
+`reports:view` (all three roles have it). It is disabled safely when no provider is
+configured.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/ai/chat` | `{ "message": "...", "conversation_id": "AIC-1001" }` → answer, sources, follow-ups |
+| `GET /api/ai/status` | `{ "enabled": true, "provider": "openai", "model": "gpt-4o-mini" }` |
+| `GET /api/ai/conversations` | The current user's 20 most recent conversations |
+| `GET /api/ai/conversations/:id` | Full transcript; another user's ID returns `404` |
+
+Design:
+
+- `app/services/analytics_data.py` holds the read-only queries shared by the
+  analytics blueprint and the AI tools, so both report identical numbers.
+- `app/services/ai_tools.py` is the only execution surface. Nine whitelisted
+  read-only tools validate arguments, enforce retailer scoping and return compact
+  JSON. There are no write tools.
+- `app/services/ai_assistant.py` owns the system prompt, bounded tool-call loop,
+  deterministic fallback for models without native tool calling, medical guardrail
+  and follow-up suggestions.
+- `app/services/llm/` contains the provider abstraction: OpenAI-compatible
+  (`/chat/completions`) and Ollama (`/api/chat`) using only the standard library.
+- Conversations and visible turns persist in `ai_conversations` / `ai_messages`,
+  owned by `user_id`. Tool payloads are not persisted.
+- Rate limiting counts the user's recent `ai_messages`; no Redis is required.
+- Provider failures are logged as `ai.provider_error` (type only) and mapped to
+  safe `502`/`503`/`504` responses. API keys, prompts and provider bodies never
+  reach the client.
+
+Tests inject a fake provider via `app.extensions["llm_provider"]`, so the suite
+never calls a real model:
+
+```bash
+pytest tests/test_ai_provider.py tests/test_ai_tools.py tests/test_ai_chat.py
+```
+
+For a local model:
+
+```bash
+# terminal 1
+ollama serve
+ollama pull llama3.1:8b
+
+# backend/.env
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.1:8b
+LLM_BASE_URL=http://127.0.0.1:11434
+```
+
 ## Data model
 
 Tables (all with `created_at`/`updated_at` timestamps where applicable):
@@ -179,7 +241,7 @@ Tables (all with `created_at`/`updated_at` timestamps where applicable):
 `roles`, `users`, `retailers`, `categories`, `suppliers`, `medicines`, `batches`,
 `inventory`, `stock_movements`, `orders`, `order_items`, `order_item_allocations`,
 `order_events`, `invoices`, `activity_log`, `notifications`, `counters`,
-`revoked_tokens`.
+`revoked_tokens`, `ai_conversations`, `ai_messages`.
 
 Key guarantees enforced in the schema:
 
@@ -241,8 +303,14 @@ backend/
       orders.py          # order create/list/status + retailers
       invoices.py        # invoice list/detail/payment
       analytics.py       # dashboard, reports, forecast
+      ai.py              # authenticated assistant chat/status/conversations
+    services/
+      analytics_data.py  # read-only queries shared with the AI tools
+      ai_tools.py        # nine whitelisted read-only tools + validation
+      ai_assistant.py    # prompt, tool loop, guardrails, fallbacks
+      llm/               # provider abstraction (OpenAI-compatible, Ollama)
   migrations/            # Alembic environment and versions
-  tests/                 # pytest suite (SQLite + PostgreSQL)
+  tests/                 # pytest suite (SQLite + PostgreSQL + mocked LLM)
   docs/API.md            # endpoint reference
   Dockerfile             # production Gunicorn image
   docker-entrypoint.sh   # migrations then Gunicorn; never seeds
@@ -263,5 +331,9 @@ backend/
 - Structured logs cover startup, API/DB errors, authentication, order lifecycle,
   inventory adjustments and invoices. Passwords, secrets and full tokens are
   never logged; request bodies are never logged.
+- LLM credentials are backend-only. The assistant can execute only the
+  whitelisted read-only tools, with retailer scoping and per-user rate limiting.
+  Prompts and tool results are treated as untrusted data, medical questions are
+  declined, and provider errors never expose response bodies or secrets.
 - `/api/health` (`/live`) is a liveness probe; `/api/health/ready` verifies the
   database without exposing connection details.

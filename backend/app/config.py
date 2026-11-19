@@ -131,6 +131,31 @@ class Config:
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
     LOG_FORMAT = os.environ.get("LOG_FORMAT", "text" if not _IS_PRODUCTION else "json")
 
+    # AI assistant. Provider credentials stay server-side; the frontend only
+    # ever sees the authenticated /api/ai/* endpoints.
+    LLM_PROVIDER = (os.environ.get("LLM_PROVIDER") or "openai").strip().lower()
+    LLM_MODEL = (os.environ.get("LLM_MODEL") or "gpt-4o-mini").strip()
+    LLM_API_KEY = os.environ.get("LLM_API_KEY") or ""
+    LLM_BASE_URL = (
+        os.environ.get("LLM_BASE_URL")
+        or (
+            "http://127.0.0.1:11434"
+            if LLM_PROVIDER == "ollama"
+            else "https://api.openai.com/v1"
+        )
+    ).rstrip("/")
+    LLM_TIMEOUT = _int_env("LLM_TIMEOUT", 30)
+    LLM_MAX_TOKENS = _int_env("LLM_MAX_TOKENS", 800)
+
+    AI_MAX_MESSAGE_LENGTH = _int_env("AI_MAX_MESSAGE_LENGTH", 2000)
+    AI_MAX_HISTORY_MESSAGES = _int_env("AI_MAX_HISTORY_MESSAGES", 12)
+    AI_MAX_TOOL_ITERATIONS = _int_env("AI_MAX_TOOL_ITERATIONS", 4)
+    AI_MAX_TOOL_CALLS_PER_TURN = _int_env("AI_MAX_TOOL_CALLS_PER_TURN", 6)
+    AI_MAX_TOOL_RESULT_CHARS = _int_env("AI_MAX_TOOL_RESULT_CHARS", 12000)
+    AI_MAX_ANSWER_CHARS = _int_env("AI_MAX_ANSWER_CHARS", 8000)
+    AI_RATE_LIMIT_REQUESTS = _int_env("AI_RATE_LIMIT_REQUESTS", 20)
+    AI_RATE_LIMIT_WINDOW_SECONDS = _int_env("AI_RATE_LIMIT_WINDOW_SECONDS", 300)
+
     DEBUG = _bool_env("FLASK_DEBUG", not _IS_PRODUCTION)
 
     JSON_SORT_KEYS = False
@@ -220,6 +245,33 @@ def validate_config(app):
     port = app.config.get("PORT")
     if not isinstance(port, int) or not 1 <= port <= 65535:
         errors.append("PORT must be an integer between 1 and 65535.")
+
+    # AI assistant. A missing API key does not prevent startup (the chat
+    # endpoint returns a safe 503 instead), but an invalid provider or an
+    # out-of-range limit is a configuration error.
+    provider = str(app.config.get("LLM_PROVIDER") or "").strip().lower()
+    if provider not in ("openai", "openai-compatible", "ollama"):
+        errors.append(
+            "LLM_PROVIDER must be one of: openai, openai-compatible, ollama."
+        )
+    if not str(app.config.get("LLM_MODEL") or "").strip():
+        errors.append("LLM_MODEL must be configured.")
+
+    for key, minimum, maximum in (
+        ("LLM_TIMEOUT", 1, 300),
+        ("LLM_MAX_TOKENS", 1, 32000),
+        ("AI_MAX_MESSAGE_LENGTH", 1, 20000),
+        ("AI_MAX_HISTORY_MESSAGES", 1, 100),
+        ("AI_MAX_TOOL_ITERATIONS", 1, 10),
+        ("AI_MAX_TOOL_CALLS_PER_TURN", 1, 20),
+        ("AI_MAX_TOOL_RESULT_CHARS", 100, 100000),
+        ("AI_MAX_ANSWER_CHARS", 100, 50000),
+        ("AI_RATE_LIMIT_REQUESTS", 0, 1000),
+        ("AI_RATE_LIMIT_WINDOW_SECONDS", 1, 86400),
+    ):
+        value = app.config.get(key)
+        if not isinstance(value, int) or not minimum <= value <= maximum:
+            errors.append(f"{key} must be an integer between {minimum} and {maximum}.")
 
     if errors:
         raise RuntimeError(

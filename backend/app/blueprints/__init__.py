@@ -4,6 +4,7 @@ from .inventory import inventory_bp
 from .orders import orders_bp
 from .invoices import invoices_bp
 from .analytics import analytics_bp
+from .ai import ai_bp
 
 __all__ = [
     "auth_bp",
@@ -12,4 +13,5 @@ __all__ = [
     "orders_bp",
     "invoices_bp",
     "analytics_bp",
+    "ai_bp",
 ]

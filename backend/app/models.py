@@ -5,7 +5,8 @@ The schema is intentionally normalised:
     roles, users, retailers, categories, suppliers,
     medicines, batches, inventory, stock_movements,
     orders, order_items, order_item_allocations, order_events,
-    invoices, activity_log, notifications, counters, revoked_tokens
+    invoices, activity_log, notifications, counters, revoked_tokens,
+    ai_conversations, ai_messages
 
 Business identifiers are strings (MED-001, BATCH-4201, ORD-2041, ...) because
 that is the contract the existing React frontend already uses.
@@ -360,3 +361,58 @@ class RevokedToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     jti = db.Column(db.String(64), unique=True, nullable=False, index=True)
     revoked_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class AIConversation(TimestampMixin, db.Model):
+    """A private AI assistant conversation owned by exactly one user."""
+
+    __tablename__ = "ai_conversations"
+
+    id = db.Column(db.String(30), primary_key=True)
+    user_id = db.Column(
+        db.String(20), db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    title = db.Column(db.String(180), nullable=False, default="New conversation")
+    last_message_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+
+    user = db.relationship("User")
+    messages = db.relationship(
+        "AIMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="AIMessage.created_at",
+    )
+
+
+class AIMessage(db.Model):
+    """A single user or assistant turn.
+
+    Tool calls and tool results are intentionally not persisted: they are
+    transient execution details. Only the visible conversation text is stored so
+    that follow-up questions keep their context without retaining database dumps.
+    """
+
+    __tablename__ = "ai_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(
+        db.String(30),
+        db.ForeignKey("ai_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )
+
+    conversation = db.relationship("AIConversation", back_populates="messages")
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "role IN ('user','assistant')", name="ck_ai_messages_role_valid"
+        ),
+    )

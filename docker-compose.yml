@@ -44,6 +44,16 @@ services:
       LOG_FORMAT: json
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       PORT: "5000"
+      # Optional LLM assistant. Without a key the API starts normally and
+      # POST /api/ai/chat returns a safe 503.
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-30}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-800}
+      AI_RATE_LIMIT_REQUESTS: ${AI_RATE_LIMIT_REQUESTS:-20}
+      AI_RATE_LIMIT_WINDOW_SECONDS: ${AI_RATE_LIMIT_WINDOW_SECONDS:-300}
     depends_on:
       db:
         condition: service_healthy

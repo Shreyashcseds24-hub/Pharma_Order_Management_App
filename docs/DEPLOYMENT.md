@@ -64,6 +64,21 @@ CORS_ALLOWED_ORIGINS=https://your-frontend.example.com
 REGISTRATION_ALLOWED_ROLES=retailer
 ```
 
+Optional AI assistant (leave `LLM_API_KEY` empty to keep chat disabled; the API
+still starts and returns a safe `503` from `POST /api/ai/chat`):
+
+```dotenv
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+LLM_API_KEY=<provider-key>
+# LLM_BASE_URL=https://api.openai.com/v1
+# Local Ollama: LLM_PROVIDER=ollama, LLM_MODEL=llama3.1:8b,
+#               LLM_BASE_URL=http://host.docker.internal:11434
+```
+
+Never place `LLM_API_KEY` in a `VITE_*` variable: those values are compiled into
+the browser bundle.
+
 Generate random values locally:
 
 ```bash
@@ -287,6 +302,10 @@ forward. Do not delete the PostgreSQL volume as a first response.
 | `LOG_LEVEL` / `LOG_FORMAT` | No | `INFO`/`WARNING`/`ERROR`; `json` in production. |
 | `RUN_MIGRATIONS` | No | Docker entrypoint default `true`; set `false` for release-job migrations. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Compose | Database bootstrap credentials. |
+| `LLM_PROVIDER` / `LLM_MODEL` | No | Assistant provider and model. The API starts without them. |
+| `LLM_API_KEY` / `LLM_BASE_URL` | Hosted providers | Backend-only credential/endpoint; never a `VITE_*` value. |
+| `LLM_TIMEOUT` / `LLM_MAX_TOKENS` | No | Provider request timeout and completion limit, default `30`/`800`. |
+| `AI_RATE_LIMIT_REQUESTS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | No | Per-user assistant limit, default 20 requests per 300 seconds. |
 | `VITE_API_BASE_URL` | Frontend build | API URL, for example `/api` behind the bundled proxy. |
 | `VITE_USE_MOCK_API` | Frontend build | Must be `false` for production. |
 
@@ -297,6 +316,8 @@ forward. Do not delete the PostgreSQL volume as a first response.
 - [ ] PostgreSQL has no public port/firewall rule and uses a strong password.
 - [ ] `REGISTRATION_ALLOWED_ROLES=retailer`; admins are created explicitly.
 - [ ] `CORS_ALLOWED_ORIGINS` lists only real HTTPS origins and never `*`.
+- [ ] LLM credentials live in a secret manager and never in `VITE_*` variables.
+- [ ] If the assistant is not required, `LLM_API_KEY` is left empty (chat returns `503`).
 - [ ] TLS terminates in front of the app; HTTP redirects to HTTPS.
 - [ ] Backups are automated, encrypted off-host and restore-tested.
 - [ ] Demo seed data is not present in production.

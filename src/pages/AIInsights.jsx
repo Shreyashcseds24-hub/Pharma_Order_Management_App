@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -13,12 +13,18 @@ import {
 } from 'recharts'
 import {
   AlertTriangle,
+  Bot,
   CalendarClock,
   Info,
+  Loader2,
+  MessageSquare,
   PackagePlus,
+  RefreshCw,
+  Send,
   ShieldAlert,
   Sparkles,
   Target,
+  UserRound,
 } from 'lucide-react'
 import { Helmet } from '../components/layout/Helmet'
 import { Card, CardBody, CardHeader } from '../components/ui/Card'
@@ -30,6 +36,7 @@ import { useToast } from '../components/ui/Toast'
 import { AXIS_PROPS, GRID_PROPS, SERIES_COLORS, compactCurrency, tooltipStyle } from '../components/charts/chartTheme'
 import { useAsync } from '../hooks/useAsync'
 import { getAIInsights } from '../services/analyticsService'
+import { AI_CHAT_AVAILABLE, getAIStatus, sendAIMessage } from '../services/aiService'
 import { useAuth } from '../context/AuthContext'
 import { USE_MOCK_API } from '../services/api'
 import { cn, formatCurrency, formatDate, formatNumber, formatPercent } from '../utils/format'
@@ -83,6 +90,342 @@ const RecommendationCard = ({ rec, onReorder }) => (
   </li>
 )
 
+const STARTER_PROMPTS = [
+  'Analyze my inventory and identify the biggest risks.',
+  'Which medicines are expiring within 30 days?',
+  'Summarize the pending orders.',
+]
+
+const ASSISTANT_STATUS_TONES = {
+  ready: 'bg-emerald-50 text-emerald-700 ring-emerald-200/70',
+  idle: 'bg-slate-100 text-slate-600 ring-slate-200/70',
+  warning: 'bg-amber-50 text-amber-800 ring-amber-200/70',
+  error: 'bg-red-50 text-red-700 ring-red-200/70',
+}
+
+const AssistantMessage = ({ message, isLast, sending, onFollowUp }) => {
+  const isUser = message.role === 'user'
+  return (
+    <div className={cn('flex items-start gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      <span
+        className={cn(
+          'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl shadow-soft',
+          isUser ? 'bg-brand-600 text-white' : 'bg-app-surface text-brand-700',
+        )}
+      >
+        {isUser ? (
+          <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
+      </span>
+      <div className={cn('flex min-w-0 max-w-[88%] flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
+        <div
+          className={cn(
+            'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-soft',
+            isUser
+              ? 'bg-brand-600 text-white'
+              : message.error
+                ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200/70'
+                : 'bg-white/70 text-slate-700 ring-1 ring-inset ring-white/60',
+          )}
+        >
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        </div>
+        {message.limited ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-inset ring-amber-200/70">
+            <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+            Business data only — no medical advice
+          </span>
+        ) : null}
+        {message.sources?.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {message.sources.map((source) => (
+              <Badge key={source.tool} tone="brand" size="sm">
+                {source.label}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {isLast && !sending && message.followUps?.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {message.followUps.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => onFollowUp(prompt)}
+                className="rounded-full bg-brand-50 px-3 py-1 text-left text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200/60 transition-colors hover:bg-brand-100"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+const AssistantPanel = () => {
+  const { toast } = useToast()
+  const [status, setStatus] = useState({ loading: AI_CHAT_AVAILABLE, data: null, error: null })
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [conversationId, setConversationId] = useState(null)
+  const [error, setError] = useState(null)
+  const listRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!AI_CHAT_AVAILABLE) return undefined
+    let active = true
+    getAIStatus()
+      .then((data) => {
+        if (active) setStatus({ loading: false, data, error: null })
+      })
+      .catch((err) => {
+        if (active) setStatus({ loading: false, data: null, error: err.message })
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const node = listRef.current
+    if (node) node.scrollTop = node.scrollHeight
+  }, [messages, sending])
+
+  const ready = AI_CHAT_AVAILABLE && status.data?.enabled !== false
+
+  const send = async (text) => {
+    const value = (text ?? input).trim()
+    if (!value || sending) return
+
+    if (!AI_CHAT_AVAILABLE) {
+      toast(
+        'The live assistant needs the Flask API. Start the backend and turn off demo mode to ask questions.',
+        { type: 'info', title: 'Assistant unavailable in demo mode' },
+      )
+      return
+    }
+
+    if (status.data && status.data.enabled === false) {
+      toast(
+        'The assistant is not configured. Ask an administrator to set the LLM provider, model and API key.',
+        { type: 'warning', title: 'Assistant not configured' },
+      )
+      return
+    }
+
+    if (value.length > 2000) {
+      toast('Keep the question to 2000 characters or fewer.', { type: 'warning' })
+      return
+    }
+
+    setInput('')
+    setError(null)
+    setMessages((prev) => [...prev, { role: 'user', content: value }])
+    setSending(true)
+
+    try {
+      const data = await sendAIMessage({ message: value, conversationId })
+      if (data.conversation_id) setConversationId(data.conversation_id)
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.answer,
+          sources: data.sources ?? [],
+          followUps: data.follow_ups ?? [],
+          limited: Boolean(data.limited),
+        },
+      ])
+    } catch (err) {
+      const message = err?.message || 'The assistant could not answer. Please try again.'
+      setError(message)
+      setMessages((prev) => [...prev, { role: 'assistant', content: message, error: true }])
+      toast(message, { type: 'error', title: 'Assistant error' })
+    } finally {
+      setSending(false)
+      inputRef.current?.focus()
+    }
+  }
+
+  const reset = () => {
+    setMessages([])
+    setConversationId(null)
+    setError(null)
+    setInput('')
+    inputRef.current?.focus()
+  }
+
+  let chip = { label: 'Checking provider', tone: 'idle' }
+  if (!AI_CHAT_AVAILABLE) {
+    chip = { label: 'Demo mode', tone: 'idle' }
+  } else if (status.error) {
+    chip = { label: 'Status unavailable', tone: 'warning' }
+  } else if (status.data?.enabled) {
+    chip = {
+      label: `${status.data.provider} · ${status.data.model}`,
+      tone: 'ready',
+    }
+  } else if (status.data) {
+    chip = { label: 'Not configured', tone: 'warning' }
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Ask MediFlow AI"
+        description="Ask about inventory, orders, sales or expiry. Answers use live read-only database tools."
+        icon={MessageSquare}
+        action={
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex max-w-[14rem] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset',
+                ASSISTANT_STATUS_TONES[chip.tone],
+              )}
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
+              <span className="truncate">{chip.label}</span>
+            </span>
+            {messages.length ? (
+              <Button size="sm" variant="ghost" icon={RefreshCw} onClick={reset}>
+                New
+              </Button>
+            ) : null}
+          </div>
+        }
+      />
+      <CardBody className="space-y-3">
+        {!AI_CHAT_AVAILABLE ? (
+          <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/70">
+            This build runs in demo mode, so the live assistant is disabled. Start the Flask API
+            and set <code className="font-mono">VITE_USE_MOCK_API=false</code> to ask questions
+            about real data. No answers are fabricated here.
+          </p>
+        ) : null}
+        {AI_CHAT_AVAILABLE && status.data && status.data.enabled === false ? (
+          <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200/70">
+            The assistant is not configured on the server. An administrator must set{' '}
+            <code className="font-mono">LLM_PROVIDER</code>, <code className="font-mono">LLM_MODEL</code>{' '}
+            and an API key (or Ollama base URL).
+          </p>
+        ) : null}
+
+        <div
+          ref={listRef}
+          aria-live="polite"
+          className="scroll-thin max-h-[26rem] min-h-[7rem] space-y-3 overflow-y-auto pr-1"
+        >
+          {messages.length === 0 && !sending ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl bg-white/60 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-white/60">
+                <p className="flex items-center gap-2 font-semibold text-slate-800">
+                  <Sparkles className="h-4 w-4 text-brand-600" aria-hidden="true" />
+                  Start with a question about your operations.
+                </p>
+                <p className="mt-1 text-xs text-app-muted">
+                  The assistant only reads data your role is allowed to see. It cannot place
+                  orders, change stock or give medical advice.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {STARTER_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => send(prompt)}
+                    disabled={!ready}
+                    className="rounded-full bg-brand-50 px-3 py-1.5 text-left text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200/60 transition-colors hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {messages.map((message, index) => (
+            <AssistantMessage
+              key={`${message.role}-${index}`}
+              message={message}
+              isLast={index === messages.length - 1}
+              sending={sending}
+              onFollowUp={send}
+            />
+          ))}
+
+          {sending ? (
+            <div className="flex items-center gap-2.5 text-xs text-app-muted">
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-app-surface text-brand-700 shadow-soft">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              </span>
+              Checking your data…
+            </div>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200/70">
+            {error}
+          </p>
+        ) : null}
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            send()
+          }}
+          className="space-y-2"
+        >
+          <label htmlFor="ai-assistant-input" className="sr-only">
+            Ask the MediFlow assistant
+          </label>
+          <textarea
+            id="ai-assistant-input"
+            ref={inputRef}
+            rows={2}
+            value={input}
+            maxLength={2000}
+            disabled={!ready || sending}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                send()
+              }
+            }}
+            placeholder={
+              ready
+                ? 'e.g. Which medicines should I reorder first?'
+                : 'The assistant is unavailable until the backend is connected.'
+            }
+            className="neu-inset-sm w-full resize-none rounded-xl border border-white/40 px-3.5 py-2.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-400/60 disabled:cursor-not-allowed disabled:opacity-70"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-app-muted">
+              Enter to send · Shift + Enter for a new line · No medical advice
+            </p>
+            <Button
+              type="submit"
+              size="sm"
+              icon={Send}
+              loading={sending}
+              disabled={!ready || !input.trim()}
+            >
+              Ask assistant
+            </Button>
+          </div>
+        </form>
+      </CardBody>
+    </Card>
+  )
+}
+
 export const AIInsights = () => {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -116,7 +459,7 @@ export const AIInsights = () => {
 
   return (
     <div className="space-y-4">
-      <Helmet title="AI Insights" description="Demo demand forecasts and replenishment recommendations." />
+      <Helmet title="AI Insights" description="Demand forecasts, replenishment recommendations and an optional read-only operations assistant." />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -155,6 +498,8 @@ export const AIInsights = () => {
       </DemoBanner>
 
       {error ? <ErrorState message={error} onRetry={reload} /> : null}
+
+      <AssistantPanel />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

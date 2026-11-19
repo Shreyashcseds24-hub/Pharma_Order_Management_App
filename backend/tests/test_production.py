@@ -85,6 +85,10 @@ def test_production_config_accepts_hardened_values():
             {"REGISTRATION_ALLOWED_ROLES": ["admin", "retailer"]},
             "privileged roles",
         ),
+        ({"LLM_PROVIDER": "unknown"}, "LLM_PROVIDER"),
+        ({"LLM_MODEL": ""}, "LLM_MODEL"),
+        ({"LLM_TIMEOUT": 0}, "LLM_TIMEOUT"),
+        ({"AI_RATE_LIMIT_WINDOW_SECONDS": 0}, "AI_RATE_LIMIT_WINDOW_SECONDS"),
     ],
 )
 def test_production_config_rejects_unsafe_values(overrides, message):

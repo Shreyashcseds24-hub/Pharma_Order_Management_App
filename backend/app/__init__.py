@@ -100,6 +100,7 @@ def create_app(config_object=None):
         return jsonify({"message": "Your session has been revoked. Please sign in again.", "status": 401}), 401
 
     from .blueprints import (
+        ai_bp,
         analytics_bp,
         auth_bp,
         inventory_bp,
@@ -117,6 +118,7 @@ def create_app(config_object=None):
         (retailers_bp, "/api/retailers"),
         (invoices_bp, "/api/invoices"),
         (analytics_bp, "/api/analytics"),
+        (ai_bp, "/api/ai"),
     ):
         app.register_blueprint(blueprint, url_prefix=prefix)
 

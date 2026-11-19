@@ -545,6 +545,125 @@ projection, not a trained ML model:
 horizon) and `actual` (units issued recently). Recommendations include
 `suggestedQuantity`, `urgency` and a human-readable reason.
 
+## AI assistant
+
+All assistant endpoints require a bearer token and the `reports:view` permission
+(admin, distributor and retailer all have it). Conversations are private to the
+authenticated user.
+
+The assistant is optional. If no LLM provider is configured the rest of the API
+still starts normally; `POST /ai/chat` returns a safe `503`.
+
+### `POST /ai/chat`
+
+```json
+{
+  "message": "Which medicines should I reorder first?",
+  "conversation_id": "AIC-1001"
+}
+```
+
+`message` is required, trimmed and limited by `AI_MAX_MESSAGE_LENGTH` (default
+2000). `conversation_id` is optional; omit it to start a new conversation. Unknown
+fields are rejected. Send only `message` and `conversation_id`.
+
+Response:
+
+```json
+{
+  "conversation_id": "AIC-1001",
+  "answer": "Amoxicillin 500 mg is below its reorder level...",
+  "sources": [
+    { "tool": "get_low_stock_medicines", "label": "Low-stock medicines" }
+  ],
+  "tool_calls": [
+    { "name": "get_low_stock_medicines", "arguments": { "limit": 10 } }
+  ],
+  "follow_ups": ["Which low-stock medicines should I reorder first?"],
+  "limited": false
+}
+```
+
+- `answer` is plain text. The frontend renders it as text, never HTML.
+- `sources` lists the read-only tools that produced the answer.
+- `limited` is `true` for medical questions. In that case the assistant does not
+  call the provider or any tool and refers the user to a healthcare professional.
+- The user turn and assistant answer are persisted for the owner. Tool payloads
+  are not persisted.
+- Retailer tool results are scoped to the caller's own orders and sales.
+
+Errors:
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Body is not a JSON object. |
+| `401` | Missing/invalid/revoked token. |
+| `404` | Conversation does not exist or belongs to another user. |
+| `422` | Empty/oversized message, unsupported field, or bad `conversation_id`. |
+| `429` | Per-user chat rate limit (`AI_RATE_LIMIT_REQUESTS` per window) or upstream provider limit. |
+| `502` | Provider rejected its credentials or returned an invalid response. |
+| `503` | Assistant not configured or provider unavailable. |
+| `504` | Provider timed out. |
+
+### `GET /ai/status`
+
+Returns non-sensitive provider metadata. The API key is never included.
+
+```json
+{ "enabled": true, "provider": "openai", "model": "gpt-4o-mini" }
+```
+
+### `GET /ai/conversations`
+
+Returns the caller's 20 most recent conversations:
+
+```json
+{
+  "conversations": [
+    {
+      "conversation_id": "AIC-1001",
+      "title": "Which medicines should I reorder first?",
+      "last_message_at": "2026-11-19T10:15:00+00:00"
+    }
+  ]
+}
+```
+
+### `GET /ai/conversations/:conversation_id`
+
+Returns one owned transcript. A conversation owned by another user returns `404`
+rather than revealing that it exists.
+
+```json
+{
+  "conversation_id": "AIC-1001",
+  "title": "Which medicines should I reorder first?",
+  "created_at": "2026-11-19T10:15:00+00:00",
+  "updated_at": "2026-11-19T10:15:04+00:00",
+  "messages": [
+    { "role": "user", "content": "...", "created_at": "..." },
+    { "role": "assistant", "content": "...", "created_at": "..." }
+  ]
+}
+```
+
+### Read-only tools
+
+The model can only request these tools. Arguments are validated, bounded and
+retailer-scoped; there are no create/update/delete tools.
+
+| Tool | Arguments |
+| --- | --- |
+| `get_inventory_summary` | none |
+| `get_low_stock_medicines` | `limit` 1–50 |
+| `get_expiring_medicines` | `days` 1–365, `limit` 1–100 |
+| `get_medicine_details` | `medicine_id`, optional `include_batches` |
+| `get_order_summary` | `days` 1–365, optional `status` |
+| `get_sales_summary` | `days` 1–365, optional `compare_previous` |
+| `get_top_selling_medicines` | `days` 1–365, `limit` 1–50 |
+| `get_pending_orders` | `limit` 1–50 |
+| `get_inventory_recommendations` | `horizon` 1–90, `limit` 1–50 |
+
 ## Frontend mapping
 
 The React services call exactly these paths:
@@ -556,6 +675,7 @@ The React services call exactly these paths:
 | `inventoryService` | `GET /inventory`, `GET /inventory/summary`, `GET /inventory/movements`, `POST /inventory/batches/:id/adjust` |
 | `orderService` | `GET/POST /orders`, `GET /orders/:id`, `PATCH /orders/:id/status`, `GET /retailers` |
 | `analyticsService` | `GET /invoices`, `GET /invoices/:id`, `POST /invoices/:id/payment`, `GET /analytics/dashboard`, `GET /analytics/reports`, `GET /analytics/forecast` |
+| `aiService` | `POST /ai/chat`, `GET /ai/status`, `GET /ai/conversations`, `GET /ai/conversations/:id` |
 
 When any protected call returns `401`, the frontend clears its stored token/session
 and redirects to `/login`.

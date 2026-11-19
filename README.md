@@ -32,6 +32,10 @@ depend on a third-party component library for its visual identity.
   order, payment status, and admin/distributor-only invoice access.
 - **Analytics and forecasting** — dashboard aggregates, reports and a documented
   rule-based forecasting heuristic (not a trained ML model).
+- **AI operations assistant** — optional LLM-backed chat on the AI Insights page
+  that answers inventory, order, sales and expiry questions through read-only,
+  role-scoped database tools. Medical questions are declined with a referral to a
+  healthcare professional. Disabled in demo mode; no answers are fabricated.
 - **Retailer scoping** — retailers only see their own orders and related data.
 - **Two frontend data modes** — live Flask API or the original in-browser mock
   data layer.
@@ -214,6 +218,13 @@ secrets in a `VITE_*` variable.
 | `POSTGRES_DB` | Compose | `mediflow` | Database name. |
 | `POSTGRES_USER` | Compose | `mediflow` | Database user. |
 | `POSTGRES_PASSWORD` | Compose | — | Database password; required. |
+| `LLM_PROVIDER` | No | `openai` | `openai`, `openai-compatible` or `ollama`. |
+| `LLM_MODEL` | No | `gpt-4o-mini` | Provider model name. |
+| `LLM_API_KEY` | OpenAI providers | — | Backend-only credential; never sent to the browser. |
+| `LLM_BASE_URL` | No | provider default | OpenAI-compatible endpoint or Ollama URL. |
+| `LLM_TIMEOUT` / `LLM_MAX_TOKENS` | No | `30` / `800` | Provider request timeout and completion limit. |
+| `AI_MAX_MESSAGE_LENGTH` | No | `2000` | Maximum chat question length. |
+| `AI_RATE_LIMIT_REQUESTS` / `AI_RATE_LIMIT_WINDOW_SECONDS` | No | `20` / `300` | Per-user chat rate limit. |
 
 Production startup rejects weak/placeholder JWT secrets, debug mode, non-PostgreSQL
 database URLs, wildcard CORS and privileged self-registration. The complete
@@ -370,6 +381,9 @@ Store backups encrypted and off-host, and restore-test them routinely. Never run
 - Production errors return generic JSON without stack traces. Structured logs
   include IDs, statuses, durations and error types, never passwords, JWT secrets
   or full tokens.
+- LLM credentials stay on the backend. The assistant can only call whitelisted
+  read-only tools, is retailer-scoped, rate-limited per user and declines medical
+  advice; prompt text and tool results are treated as untrusted input.
 - The database is private on the Docker network and not published by default.
 - Bearer tokens are stored in `localStorage` by the existing frontend. Protect
   against XSS with a CSP/WAF at the reverse proxy and keep dependencies updated.
@@ -410,6 +424,10 @@ of the UI is unchanged. Production/Docker builds force live mode.
 | GET | `/analytics/dashboard` | Dashboard aggregates |
 | GET | `/analytics/forecast?horizon=7\|30` | Rule-based forecast |
 | GET | `/analytics/reports` | Report data |
+| POST | `/ai/chat` | Ask the read-only operations assistant |
+| GET | `/ai/status` | Whether the LLM provider is configured (no secrets) |
+| GET | `/ai/conversations` | Current user's recent conversations |
+| GET | `/ai/conversations/:id` | One owned conversation transcript |
 | GET | `/health`, `/health/live` | Liveness |
 | GET | `/health/ready` | Database readiness |
 
@@ -417,12 +435,55 @@ All API routes are prefixed with `/api`.
 
 ## About the AI features
 
-The AI Insights page is explicitly labelled as rule-based output. Forecasts,
-confidence values and replenishment quantities come from a moving-average
-heuristic; they are **not** produced by a trained model. The same heuristic is
-implemented server-side at `GET /analytics/forecast` so live and mock modes agree.
-Replace that endpoint with a real forecasting service when one is ready and update
-the disclaimer on the page.
+### Rule-based analytics
+
+The forecast cards on the AI Insights page are explicitly labelled as rule-based
+output. Forecasts, confidence values and replenishment quantities come from a
+moving-average heuristic; they are **not** produced by a trained model. The same
+heuristic is implemented server-side at `GET /analytics/forecast` so live and mock
+modes agree.
+
+### Live operations assistant
+
+The same page includes **Ask MediFlow AI**. When an LLM provider is configured, the
+assistant answers operational questions using a fixed set of read-only backend
+tools:
+
+| Tool | Data |
+| --- | --- |
+| `get_inventory_summary` | Aggregate stock, value and expiry KPIs |
+| `get_low_stock_medicines` | Items at or below their reorder level |
+| `get_expiring_medicines` | Batches expiring in a chosen window |
+| `get_medicine_details` | One catalog medicine and its batches |
+| `get_order_summary` | Recent orders, optionally by status |
+| `get_sales_summary` | Revenue, units and order counts |
+| `get_top_selling_medicines` | Best sellers by units |
+| `get_pending_orders` | Orders awaiting approval |
+| `get_inventory_recommendations` | Replenishment suggestions |
+
+Safety properties:
+
+- Tools are read-only. The model cannot create orders, adjust stock, record
+  payments or change prices.
+- Every tool call runs with the authenticated user's identity, so retailer
+  scoping is enforced in SQL. Conversations are private to their owner.
+- Tool arguments are validated against a whitelist; unknown tools and extra
+  fields are rejected.
+- Prompts treat user text and tool results as untrusted data. Prompt-injection
+  attempts cannot add tools or bypass authorization.
+- Medical questions (diagnosis, dosage, treatment, side effects, interactions)
+  are declined before the provider is called, with a referral to a qualified
+  healthcare professional.
+- Per-user rate limiting uses recent persisted messages, so no Redis is required.
+- Provider errors map to safe `502`/`503`/`504` responses. API keys and provider
+  response bodies are never returned to the browser.
+- In demo mode the panel is disabled and clearly says the backend is required. No
+  answers are fabricated.
+
+Configure it with the `LLM_*` variables in [`backend/.env.example`](backend/.env.example).
+For a local model, run Ollama and set `LLM_PROVIDER=ollama`, `LLM_MODEL=llama3.1:8b`
+and `LLM_BASE_URL=http://127.0.0.1:11434`. Backend tests inject a fake provider, so
+`pytest` never contacts a paid API.
 
 ## Project structure
 
@@ -436,12 +497,14 @@ src/
   pages/          Login, Register, Dashboard, Medicines, Inventory, Orders,
                   AIInsights, Invoices, Reports, Settings
   services/       api (axios), authService, medicineService, inventoryService,
-                  orderService, analyticsService, reportService
+                  orderService, analyticsService, reportService, aiService
   utils/          format, permissions
 backend/
   app/            app factory, config, logging, models, blueprints, permissions, seed
-  migrations/     Alembic schema migrations
-  tests/          pytest suite (SQLite + PostgreSQL concurrency test)
+    services/     analytics_data, ai_tools, ai_assistant, llm providers
+    blueprints/ai.py  authenticated assistant endpoints
+  migrations/     Alembic schema migrations (includes ai_conversations/ai_messages)
+  tests/          pytest suite (SQLite + PostgreSQL concurrency test, mocked LLM)
   docs/API.md     endpoint reference
   Dockerfile      production backend image
 docs/
